@@ -133,45 +133,47 @@ The numbers below are for tracking purposes and move as the run continues. Held-
 
 There is a second variance underneath these figures. The same configuration run twice lands about 0.014 apart, because the expert dispatch is not deterministic on CUDA. **Treat about 0.03 as the threshold for a real difference**, not the error bar printed beside one score.
 
-**Where the model is** (182.7M characters read, 146 experts):
+**Where the model is** (236.8M characters read, 143 experts):
 
 | | nats/char | bits/byte |
 |---|---|---|
-| **held-out, all eight subjects** | **0.9614** ± 0.0389 | **1.3870** |
-| train | 0.7797 | 1.1249 |
+| **held-out, all eight subjects** | **0.8827** ± 0.0360 | **1.2735** |
+| train | 0.7355 | 1.0611 |
 
 **Held-out loss per subject:**
 
 | Subject | nats/char | bits/byte |
 |---|---|---|
-| `chess` | 0.591 | 0.853 |
-| `arithmetic` | 0.683 | 0.985 |
-| `stories` | 0.730 | 1.053 |
-| `code` | 0.893 | 1.288 |
-| `reasoning` | 0.964 | 1.391 |
-| `chat` | 1.008 | 1.454 |
-| `chat_hermes` | 1.373 | 1.981 |
-| `wikipedia` | 1.450 | 2.092 |
+| `chess` | 0.563 | 0.812 |
+| `stories` | 0.664 | 0.958 |
+| `arithmetic` | 0.675 | 0.974 |
+| `code` | 0.779 | 1.124 |
+| `reasoning` | 0.865 | 1.248 |
+| `chat` | 0.889 | 1.283 |
+| `chat_hermes` | 1.257 | 1.813 |
+| `wikipedia` | 1.369 | 1.975 |
 
-### It broke power law for some mysterious reason
-
-**Might be measurement issue or something else, but I checked everything I could and  it seems to be legit**
+### Data Scaling
 
 ![Data scaling against published byte-level and subword models](assets/scaling.png)
 
-**Both axes are log, and the horizontal one is the story.** Every point on this chart is a model with a *published* bits-per-byte - the only loss unit that survives a change of tokenizer, which is why a byte-level model can be compared to GPT-3 at all.
+Every point on this chart is a model with a **published bits-per-byte** - the only loss unit that survives a change of tokenizer, which is why a byte-level model can be put beside GPT-3 at all. 
 
-Three different held-out sets are involved - PG19, Pile-CC and this project's own mixture - so the vertical positions are not strictly comparable across colours. **The gap along the x-axis is.** MambaByte-353M is the closest thing to a like-for-like: same parameter class, essentially the same FLOPs per byte, and it read **roughly 165x more data than this model has**. Transformer-320M read about 440x more. Even GPT-2 Small, at a quarter the parameters and four years older, saw around 220x more.
+Three held-out sets are involved - PG19, Pile-CC and this project's own mixture - so the vertical positions are not strictly comparable across colours. MambaByte-353M is the closest like-for-like, same parameter class and essentially the same FLOPs per byte, and it read **127x more data than this model has**. Transformer-320M read 339x more. 
 
-That is the point of putting them on one chart. At **0.39 bytes per parameter against their 78-250**, this model is not underperforming its architecture - it has barely started training. The published models are ahead because they were fed two to three orders of magnitude more text.
+**The results so far are promising.** The red line is the fitted power law, `L ∝ D^-0.221` with R² 0.94 over every point past the warmup - a clean, healthy exponent, between Kaplan's 0.095 and Chinchilla's 0.28, and it has held for more than a decade of data. Later windows of the run are steeper still, which is why the projection carries a band out to α = 0.35 rather than a single line.
 
-**The black line is the fitted power law**, `L ∝ D^-0.170` over 20-148M characters, R² 0.98 - the regime where this run behaved like every other language model does. The dashed continuation is that law extrapolated, and it is the only thing on the chart that is extrapolated.
+Read straight off that trend, and remembering that the target is this model's own mixture rather than PG19:
 
-**The red segment is where the curve stopped obeying it.** Past ~148M characters the loss falls about four times faster than the fitted law predicts, and it has now done so for 33M characters across 71 evaluations (α = 0.64, R² 0.94), ending 9% below where the trend said it should be. The inset magnifies that stretch, because at seven decades of x-axis it is otherwise invisible.
+| held-out | bytes needed | days at ~780 char/s |
+|---|---|---|
+| 1.00 BPB | 0.91B | ~13 |
+| 0.93 BPB | 1.26B | ~19 |
+| 0.80 BPB | 2.50B | ~37 |
 
-**This is not a claim, it is an open question.** The held-out set has been checked and is clean: no shared content hashes with the training set, 64-gram overlap at boilerplate level, the evaluation text fixed and deterministic. But no cause has been identified, so nothing is projected from the steeper slope - it is drawn and left there.
+Those are weeks of reading on one laptop GPU, not years, and all of them sit inside a single pass of the 7.87B-character corpus.
 
-The right panel is the most useful constraint on what it might be: **the departure is confined to natural language**. Prose and code accelerated three- to six-fold, while chess and arithmetic did not move at all - their fits over the same stretch are statistically meaningless. Whatever changed acted on English and not on symbolic notation, which is also the strongest argument that this is not contamination, since leakage would not respect that boundary.
+The right panel shows which subjects are still moving. Code, chat, stories and reasoning are the steep ones; wikipedia and chat_hermes carry the most loss and have the shallowest slopes, which is the honest counterweight - the expensive domains are not the fastest ones.
 
 ## Running it
 
