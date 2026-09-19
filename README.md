@@ -345,3 +345,18 @@ The parts the model is built out of:
 [The AdEMAMix Optimizer](https://arxiv.org/abs/2409.03137) - Pagliardini et al., 2024. Implemented for the trunk and available, though at the paper's settings it hurt this model and it is not the default.
 
 The corpus: [TinyStories](https://huggingface.co/datasets/roneneldan/TinyStories), [OpenHermes-2.5](https://huggingface.co/datasets/teknium/OpenHermes-2.5), [OpenThoughts-114k](https://huggingface.co/datasets/open-thoughts/OpenThoughts-114k) and [the Lichess open database](https://database.lichess.org/). Wikipedia and the source-code portion come from public dumps and public repositories.
+
+## Citation
+
+If you use this project in your research or work, please cite it as:
+
+```bibtex
+@software{Borsky_mini_AGI_2026,
+  author = {Borsky, Alexey},
+  month = {9},
+  title = {{mini-AGI: A Continually Learning Byte-Level Language Model}},
+  url = {https://github.com/volotat/mini-AGI},
+  version = {1.0.0},
+  year = {2026}
+}
+```
