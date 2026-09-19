@@ -6,7 +6,7 @@ It stores its weights as ordinary files on disk and pages them onto the card as 
 **NOTE: as of now this is a small toy-level model.** Do not expect a frontier level capabilities. This is rather a small experiment to show, that continual learning from the single stream of data without catastrophic forgetting is possible. Furthermore it is possible on a modest hardware. Which means that almost everyone could train their own version of the model (or simply continue training this one) exactly as they see it fit. And the capabilities would be bounded by the actual hardware, scale and quality of the data available and the amount of time one willing to spend on training the model.
 
 ![dashboard](assets/dashboard.png)
-Here is how min-run dashboard looks like. The model is pointed to the corpus to constantly read and learn from.
+*Here is how min-run dashboard looks like. The model is pointed to the corpus to constantly read and learn from.*
 
 ## Motivation
 
@@ -35,7 +35,29 @@ Three distinct blocks, up to 26 block-applications per character.
 - **Routing per block-application, not per character.** Each of the 26 applications picks its own top-8 experts, so one character touches far more of the pool than "top-8" suggests, and the same expert can be selected several times at different depths. What varies is *which* eight at each point.
 - **No expert is assigned a subject.** There are no labels anywhere. Soft top-k routing distributes capability across the pool by itself, and a character can combine fragments from several experts. The cost is that capabilities share parameters and so *can* interfere.
 
+![how the model processes one character](assets/shape.gif)
+
+**This is the architecture assembling itself, one character at a time**, captured from the live model - nothing here is drawn by hand.
+
+Each tile on the left is one expert; colour is expert identity and stays the same for the whole clip. A **row** is one application of the recurrent block, and the eight tiles in it are the eight experts that row actually ran. The stack grows downward as the model keeps going, and the amber line is where halting stopped it - **the grey rows below are computation the model declined to spend.**
+
+The trace on the right is how many rows each character took. It moves constantly between 4 and 14 against a ceiling of 24, and the caret under the text shows which character is being read.
+
 Positions are rotary and carry no learned parameters, which is why the context window can be extended by continued training rather than by re-initialising anything.
+
+### ...and the same thing while it writes
+
+![how the model generates text](assets/generate.gif)
+
+The clip above is the model **reading** - every character is held-out text it is being shown. This one is the model **writing**: it was primed with 2,500 characters of a held-out story and then continued on its own, so the grey text is what it was given and **the green text is entirely its own**. Greedy decoding, no sampling anywhere - run it twice and you get the same sentence.
+
+Two things are worth watching. The stack behaves the same way, because generating and reading are the same forward pass in this model - the only difference is whether the next character comes from a file or from the model's own argmax. And **writing costs more depth than reading**: about 9.9 rows a character against 8.0 on the same subject. The dotted lines mark where the working set was re-chosen, which happens every 64 characters; in this clip nothing swapped, because the prompt had already pulled the right experts onto the card.
+
+What it produced, continuing a story about a cherry tree:
+
+> They worked together and saw their favorite shore. One day, they wanted to play with their favorite shore. They wanted to play with it, but
+
+Grammatically correct and on-topic. It does repeats itself for now - which is a fair picture of where the model is at 243M characters.
 
 ## How paging works
 
