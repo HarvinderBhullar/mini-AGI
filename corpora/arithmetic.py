@@ -2,26 +2,35 @@
 """
 Synthetic arithmetic corpus for mini-AGI.
 
-Two format decisions do most of the work here, and both are forced by measured
-facts rather than taste:
+The model is byte-level, so a digit is already its own token and numbers are
+written here exactly as they are written everywhere else in the corpus. Two
+format decisions remain, and both are forced by measured facts rather than
+taste:
 
-1. DIGITS ARE SPACE-SEPARATED. The Python-trained BPE merges numerals into
-   inconsistent multi-digit tokens ('1234' -> ['12','34'], '9876543' ->
-   ['9','87','6','54','3']), which destroys place-value alignment. Spacing the
-   digits yields exactly one token per digit.
+1. ANSWERS ARE WRITTEN IN NORMAL ORDER, most significant digit first. The
+   small-model literature reverses them, because carries propagate right to
+   left and a reversed answer makes each output digit a local function of what
+   came before. That is a real advantage and it is given up on purpose: this
+   model reads wikipedia, chat, reasoning and code, where every number is
+   written forwards, and a corpus that writes them backwards teaches two
+   conflicting conventions for the same thing. Consistency across the eight
+   subjects is worth more here than the decoding trick.
 
-2. SUMS ARE WRITTEN LEAST-SIGNIFICANT-DIGIT FIRST. Carries propagate right to
-   left, so a left-to-right decoder writing the most significant digit first
-   must know the whole carry chain before its first token. Reversing the answer
-   makes each output digit a local function of what came before. This is the
-   main trick from the small-model arithmetic literature and it is worth far
-   more than parameters at this scale.
+   What replaces it is the scratchpad. A trace that works right to left gives
+   the model the same local structure reversal gave it, without changing how
+   numbers are spelled.
+
+2. THE SCRATCHPAD SHOWS THE WORK, not the result. Every step must be derivable
+   from the ones before it. A note that states the answer and calls itself
+   working teaches the model to emit a plausible number and copy it - which is
+   exactly what a scratchpad reading `total=146738` produced: correct partial
+   products, an unexplained total, and a final answer copied from it.
 
 Unlike code, arithmetic is genuinely learnable by a model this size - the
 constraint is format and data volume, not capacity. Expect high exact-match on
 addition and subtraction, and materially worse on multiplication.
 
-    python3 math_data.py --out data_math --n 2000000
+    python3 corpora/arithmetic.py --out data_math_char --n 4000000
 """
 
 import os
@@ -32,34 +41,8 @@ import argparse
 
 import numpy as np
 
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-
-
-# Character-level models see every digit as its own token already, so the
-# space-separation hack the BPE needed is pure overhead there. SEP is set once
-# from the CLI and both formatters read it.
-SEP = " "
-
-
-def sp(n):
-    """123 -> '1 2 3' under BPE, '123' at character level."""
-    s = str(abs(int(n)))
-    body = SEP.join(s)
-    return f"-{SEP}{body}" if n < 0 else body
-
-
-def rev(n):
-    """
-    Answer digits, least significant first.
-
-    Carries propagate right to left, so a left-to-right decoder writing the
-    most significant digit first would need the whole carry chain before its
-    first token. Reversing makes each digit a local function of what precedes
-    it. This matters more than parameter count at this scale.
-    """
-    s = str(abs(int(n)))
-    body = SEP.join(reversed(s))
-    return f"-{SEP}{body}" if n < 0 else body
+# the repo root, not corpora/ - this is where minagi.tokenizer lives
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 
 def rnd(rng, digits):
@@ -94,15 +77,30 @@ def gen_add(rng, d, notes=False):
         if carry:
             steps.append(f"c{carry}")
         t = _think(" ".join(steps))
-    return f"add {sp(a)} + {sp(b)} = {t}{rev(a + b)}"
+    return f"add {a} + {b} = {t}{a + b}"
 
 
 def gen_sub(rng, d, notes=False):
     a, b = rnd(rng, d), rnd(rng, rng.randint(1, d))
     t = ""
     if notes:
-        t = _think(f"{a} - {b} borrow-chain {abs(a-b)} sign {'-' if a<b else '+'}")
-    return f"sub {sp(a)} - {sp(b)} = {t}{rev(a - b)}"
+        # The borrow chain runs right to left, the mirror of gen_add's carry.
+        # It is taken over the larger magnitude, because that is the only way
+        # the chain is defined; the sign is then a separate fact to state.
+        hi, lo = (a, b) if a >= b else (b, a)
+        dh, dl = str(hi)[::-1], str(lo)[::-1]
+        steps, borrow = [], 0
+        for i in range(len(dh)):
+            x = int(dh[i])
+            y = int(dl[i]) if i < len(dl) else 0
+            v = x - y - borrow
+            nxt = 1 if v < 0 else 0
+            steps.append(f"{x}-{y}-{borrow}={v % 10}b{nxt}")
+            borrow = nxt
+        if a < b:
+            steps.append("sign -")
+        t = _think(" ".join(steps))
+    return f"sub {a} - {b} = {t}{a - b}"
 
 
 def gen_mul(rng, d, notes=False):
@@ -110,27 +108,53 @@ def gen_mul(rng, d, notes=False):
     b = rnd(rng, rng.randint(1, min(2, d)))
     t = ""
     if notes:
-        parts, total = [], 0
+        # Every partial product, and then the additions that combine them.
+        # Stating a bare `total=` here is what taught the model to emit a
+        # plausible number and copy it into the answer without ever learning
+        # to add the partials.
+        vals, parts = [], []
         for i, dg in enumerate(str(b)[::-1]):
-            p = a * int(dg) * (10 ** i)
-            parts.append(f"{a}*{dg}{'0'*i}={p}")
-            total += p
-        t = _think(" ".join(parts) + f" total={total}")
-    return f"mul {sp(a)} * {sp(b)} = {t}{rev(a * b)}"
+            v = a * int(dg) * (10 ** i)
+            vals.append(v)
+            parts.append(f"{a}*{dg}{'0' * i}={v}")
+        acc = vals[0]
+        for v in vals[1:]:
+            parts.append(f"{acc}+{v}={acc + v}")
+            acc += v
+        t = _think(" ".join(parts))
+    return f"mul {a} * {b} = {t}{a * b}"
 
 
 def gen_cmp(rng, d, notes=False):
     a, b = rnd(rng, d), rnd(rng, d)
     op = rng.choice(["<", ">", "=="])
     truth = {"<": a < b, ">": a > b, "==": a == b}[op]
-    t = _think(f"len {len(str(a))} vs {len(str(b))}") if notes else ""
-    return f"cmp {sp(a)} {op} {sp(b)} = {t}{'yes' if truth else 'no'}"
+    t = ""
+    if notes:
+        sa, sb = str(a), str(b)
+        if len(sa) != len(sb):
+            body = f"len {len(sa)} vs {len(sb)}"
+        else:
+            # Equal lengths are the whole difficulty, and a length comparison
+            # alone said nothing about them.
+            k = next((i for i, (x, y) in enumerate(zip(sa, sb)) if x != y), None)
+            body = (f"len {len(sa)} vs {len(sb)} equal"
+                    if k is None else
+                    f"len {len(sa)} vs {len(sb)} digit {k} {sa[k]} vs {sb[k]}")
+        t = _think(body)
+    return f"cmp {a} {op} {b} = {t}{'yes' if truth else 'no'}"
 
 
 def gen_mod(rng, d, notes=False):
     a, b = rnd(rng, d), rng.randint(2, 99)
-    t = _think(f"{a} // {b} = {a//b} rem {a%b}") if notes else ""
-    return f"mod {sp(a)} % {sp(b)} = {t}{rev(a % b)}"
+    t = ""
+    if notes:
+        # Both halves are checkable: b*q fits under a, b*(q+1) does not, and
+        # the remainder is the subtraction. Stating `rem` alone derived nothing.
+        q = a // b
+        t = _think(f"{b}*{q}={b * q} {b}*{q + 1}={b * (q + 1)}>{a} "
+                   f"{a}-{b * q}={a % b}")
+    return f"mod {a} % {b} = {t}{a % b}"
 
 
 def gen_gcd(rng, d, notes=False):
@@ -143,13 +167,13 @@ def gen_gcd(rng, d, notes=False):
             steps.append(f"{x}%{y}={x%y}")
             x, y = y, x % y
         t = _think(" ".join(steps))
-    return f"gcd {sp(a)} , {sp(b)} = {t}{rev(_m.gcd(a, b))}"
+    return f"gcd {a} , {b} = {t}{_m.gcd(a, b)}"
 
 
 def gen_sum(rng, d, notes=False):
     k = rng.randint(2, 5)
     xs = [rnd(rng, rng.randint(1, min(d, 4))) for _ in range(k)]
-    body = " + ".join(sp(x) for x in xs)
+    body = " + ".join(str(x) for x in xs)
     t = ""
     if notes:
         run, steps = 0, []
@@ -157,14 +181,22 @@ def gen_sum(rng, d, notes=False):
             run += x
             steps.append(str(run))
         t = _think(" ".join(steps))
-    return f"sum {body} = {t}{rev(sum(xs))}"
+    return f"sum {body} = {t}{sum(xs)}"
 
 
 def gen_round(rng, d, notes=False):
     a = rnd(rng, max(d, 2))
     p = rng.choice([10, 100, 1000])
-    t = _think(f"{a}/{p}={a/p:.2f}") if notes else ""
-    return f"round {sp(a)} to {sp(p)} = {t}{rev(int(round(a / p)) * p)}"
+    # Half-UP, not Python's round(), which is half-to-even: the trace below
+    # says "r >= p/2 goes up", and a rule the working contradicts on exactly
+    # the hard cases is worse than no working at all.
+    q, r = divmod(a, p)
+    res = (q + 1) * p if r * 2 >= p else q * p
+    t = ""
+    if notes:
+        t = _think(f"{a}={q}*{p}+{r} {r}{'>=' if r * 2 >= p else '<'}{p // 2} "
+                   f"-> {'up' if r * 2 >= p else 'down'}")
+    return f"round {a} to {p} = {t}{res}"
 
 
 TASKS = {
@@ -196,27 +228,17 @@ def sample_line(rng):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--out", default="data_math")
-    ap.add_argument("--tokenizer", default="data/tokenizer.json")
     ap.add_argument("--n", type=int, default=2_000_000)
     ap.add_argument("--val", type=int, default=20000)
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--notes-frac", type=float, default=0.3,
                     help="share of examples carrying a <think> scratchpad")
-    ap.add_argument("--char", action="store_true",
-                    help="character level: no digit spacing, vocab 256")
     args = ap.parse_args()
 
-    global SEP, NOTES_FRAC
+    global NOTES_FRAC
     NOTES_FRAC = args.notes_frac
-    if args.char:
-        SEP = ""
-
-    if args.char:
-        from minagi.tokenizer import ByteTokenizer
-        tok = ByteTokenizer()
-    else:
-        from tokenizers import Tokenizer
-        tok = Tokenizer.from_file(args.tokenizer)
+    from minagi.tokenizer import ByteTokenizer
+    tok = ByteTokenizer()
     os.makedirs(args.out, exist_ok=True)
     rng = random.Random(args.seed)
 
@@ -254,8 +276,8 @@ def main():
 
     meta = {"vocab_size": tok.get_vocab_size(), "train_tokens": train_total,
             "val_tokens": val_total, "tasks": list(TASKS),
-            "tokenizer": "byte" if args.char else "bpe",
-            "note": "digits space-separated; add/sub/mul answers reversed"}
+            "tokenizer": "byte",
+            "note": "answers in normal order; scratchpads show derivable steps"}
     json.dump(meta, open(os.path.join(args.out, "meta.json"), "w"), indent=2)
     print(f"wrote {args.out}/meta.json")
     return 0
