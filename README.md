@@ -249,7 +249,6 @@ python3 -m corpora expand                          # .bin -> the text files read
 
 python3 train.py read --help                       # every knob the reader has
 python3 train.py stream --steps 140000 --lr 2e-4   # the packed-corpus path
-python3 train.py batch --use-pool --steps 2000     # the fixed-window regime
 python3 train.py ponder-probe --ckpt weights       # depth against difficulty
 ```
 
@@ -277,16 +276,14 @@ minagi/          the model. no command lines here.
   paged.py         the same pool spread over disk, RAM and VRAM
   recur.py         latent recurrence with adaptive depth
   stream.py        reading a corpus behind a KV cache, one chunk at a time
-  corpus.py        the fixed-window view, for the batch trainer and benchmarks
   store.py         the weights directory, which IS the model
-  optim.py         optimisers for the trunk, and the gradient noise scale
+  optim.py         how much of a gradient is signal
   plasticity.py    the learning rate, governed by held-out loss
-  schedule.py      the fixed cosine schedule, for the batch trainer
   live.py          serving a model that is being trained underneath
   report.py        the model reading statistics off its own weights
   create.py        writing a fresh weights directory from config.yaml
 
-train.py         read | stream | batch | ponder-probe
+train.py         read | stream | ponder-probe
 serve.py         local web UI
 config.yaml      the settings worth changing
 corpora/         python3 -m corpora all - the whole corpus, downloaded and made
@@ -364,7 +361,7 @@ The parts the model is built out of:
 [The Pile](https://arxiv.org/abs/2101.00027) - Gao et al., 2020. Bits per UTF-8 byte, chosen there for invariance to tokenisation.  
 [Transformer-XL](https://arxiv.org/abs/1901.02860) - Dai et al., 2019, and [Compressive Transformers](https://arxiv.org/abs/1911.05507) - Rae et al., 2019. The character-level benchmarks to aim at.  
 [An Empirical Model of Large-Batch Training](https://arxiv.org/abs/1812.06162) - McCandlish et al., 2018. The gradient noise scale.  
-[The AdEMAMix Optimizer](https://arxiv.org/abs/2409.03137) - Pagliardini et al., 2024. Implemented for the trunk and available, though at the paper's settings it hurt this model and it is not the default.
+[The AdEMAMix Optimizer](https://arxiv.org/abs/2409.03137) - Pagliardini et al., 2024. Implemented for the trunk and available, though at the paper's settings it hurt this model and it is not the default.  
 
 The corpus: [TinyStories](https://huggingface.co/datasets/roneneldan/TinyStories), [OpenHermes-2.5](https://huggingface.co/datasets/teknium/OpenHermes-2.5), [OpenThoughts-114k](https://huggingface.co/datasets/open-thoughts/OpenThoughts-114k) and [the Lichess open database](https://database.lichess.org/). Wikipedia and the source-code portion come from public dumps and public repositories.
 

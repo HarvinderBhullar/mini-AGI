@@ -1,23 +1,21 @@
 #!/usr/bin/env python3
 """
-Training mini-AGI. Two modes, and the first is the one that matters.
+Training mini-AGI.
 
-    stream    batch 1, a KV cache, one chunk of characters at a time. This is
-              the same path the model runs on when serving; the only difference
-              is that a gradient step is attached. Peak memory is set by
+    read      point it at files and let it read them, continually. This is the
+              one that matters, and the one the run uses.
+
+    stream    the same mechanism over a packed corpus: batch 1, a KV cache,
+              one chunk of characters at a time. Peak memory is set by
               --chunk and nothing else, so --context is nearly free to extend.
-
-    batch     the older regime: fixed windows, several per step, one autograd
-              graph over each whole window. Kept because every measurement
-              taken before the streaming path used it.
 
     probe     what depth the model chooses, per character.
 
-Streaming costs about a third of what batch costs at eight times the reach -
-3090 MB at 32k characters against 6857 MB at 4k - because the retained
-activation graph is bounded by the chunk rather than by the window. What it
-gives up is gradient averaging: a chunk-512 step sees 512 characters where a
-batch step saw 32768, so the learning rate is correspondingly lower.
+Everything here runs at batch 1 behind a cache. The fixed-window regime that
+preceded it - several windows per step, one autograd graph over each whole
+window - cost about three times as much at an eighth of the reach: 6857 MB at
+4k characters against 3090 MB at 32k, because the retained activation graph
+was bounded by the window rather than by the chunk.
 """
 
 import os
@@ -46,7 +44,6 @@ import torch
 import torch.nn as nn
 
 from minagi.recur import RecurConfig, RecurCoder, load_recur
-from minagi.corpus import Corpus
 from minagi.pool import PooledMLP, AutoGrow
 from minagi.stream import StreamSet, Evaluator, detach_caches, ramp_context
 from minagi.plasticity import Plasticity
@@ -92,309 +89,6 @@ def _resync_opt(opt, model, args):
         opt.add_param_group({"params": vecs, "name": "pool",
                              "weight_decay": 0.0,
                              "lr": base, "base_lr": base})
-
-
-def cmd_train(args):
-    device = torch.device(args.device)
-    meta = json.load(open(os.path.join(args.data, "meta.json")))
-    cfg = RecurConfig(vocab_size=meta["vocab_size"], n_head=args.n_head,
-                      d_model=args.d_model, block=args.block, d_ff=args.d_ff,
-                      n_layer=args.n_prelude + args.n_recur + args.n_coda,
-                      n_prelude=args.n_prelude, n_recur=args.n_recur,
-                      n_coda=args.n_coda, max_steps=args.max_steps,
-                      min_steps=args.min_steps, ponder_beta=args.ponder_beta,
-                      train_steps_mean=args.train_steps_mean,
-                      bptt_window=args.bptt_window,
-                      halt_prior=args.halt_prior, use_pool=args.use_pool,
-                      pool_experts=args.pool_experts, pool_d_ff=args.pool_d_ff,
-                      pool_top_k=args.pool_top_k, pool_max=args.pool_max)
-    model = RecurCoder(cfg).to(device)
-    uniq = cfg.n_prelude + cfg.n_recur + cfg.n_coda
-    print(f"params {model.n_params()/1e6:.2f}M | unique blocks {uniq} | "
-          f"block-applications {cfg.n_layer_effective} "
-          f"({cfg.n_layer_effective/uniq:.1f}x compute per parameter)")
-    print(f"vocab {cfg.vocab_size} ctx {cfg.block} | max ponder steps {cfg.max_steps}")
-
-    # --mix "dir:weight,dir:weight" trains one model on several corpora at
-    # once. Interleaving beats training sequentially: sequential stages make
-    # the last corpus overwrite the earlier ones, which is the forgetting the
-    # bank machinery exists to avoid. Mixing sidesteps it entirely when all the
-    # data is available up front.
-    if args.mix:
-        specs = []
-        for part in args.mix.split(","):
-            d, _, w = part.partition(":")
-            specs.append((d.strip(), float(w or 1.0)))
-        tot = sum(w for _, w in specs)
-        sources = [(Corpus(d, device, cfg.block, args.batch), w / tot)
-                   for d, w in specs]
-        for (c, w), (d, _) in zip(sources, specs):
-            print(f"  {d:<20} {w:>5.0%}  {c.meta['train_tokens']/1e6:>7.1f}M tokens")
-        corpus = None
-    else:
-        sources = None
-        corpus = Corpus(args.data, device, cfg.block, args.batch)
-    replay = None
-    if args.replay_data:
-        replay = Corpus(args.replay_data, device, cfg.block, args.batch)
-        print(f"replaying {args.replay_data} at {args.replay:.0%}")
-
-    # The shared trunk gets a slower learning rate than the pool.
-    #
-    # Measured: the trunk is where forgetting lives - freezing it removed 99.7%
-    # of it - but freezing also stops the model learning anything genuinely new.
-    # Slowing it is the tunable middle. In streaming the best setting was x0.1
-    # (spread 2.331 -> 0.878); in mixed batches it was x0.3, which improved BOTH
-    # mean loss (2.472 -> 2.380) and spread (1.352 -> 1.005). Even inside one
-    # mixed batch the domains pull the trunk in different directions every step,
-    # and letting the experts do the fast adapting reduces that conflict.
-    if cfg.use_pool:
-        sites = [m for m in model.modules() if isinstance(m, PooledMLP)]
-        pool_ids = {id(p) for e in model.pool.experts for p in e.parameters()}
-        pool_ids |= {id(s.router.weight) for s in sites}
-        pool_ids |= {id(s.depth_emb) for s in sites}
-        pool_ids.add(id(model.pool.gate))
-    else:
-        pool_ids = set()
-
-    def groups(want_pool):
-        ps = [p for p in model.parameters()
-              if (id(p) in pool_ids) == want_pool]
-        return ([p for p in ps if p.dim() >= 2], [p for p in ps if p.dim() < 2])
-
-    tm, tv = groups(False)
-    pm, pv = groups(True)
-    param_groups = [
-        {"params": tm, "weight_decay": args.wd, "name": "trunk"},
-        {"params": tv, "weight_decay": 0.0, "name": "trunk"},
-    ]
-    if pm or pv:
-        param_groups += [
-            {"params": pm, "weight_decay": args.wd, "name": "pool"},
-            {"params": pv, "weight_decay": 0.0, "name": "pool"},
-        ]
-    opt = torch.optim.AdamW(param_groups, lr=args.lr, betas=(0.9, 0.95),
-                            fused=(device.type == "cuda"))
-    if pool_ids:
-        print(f"trunk learns at {args.trunk_lr_mult:g}x the pool's rate "
-              f"({sum(p.numel() for p in tm+tv)/1e6:.2f}M trunk, "
-              f"{sum(p.numel() for p in pm+pv)/1e6:.2f}M pool)")
-
-    grower = None
-    if cfg.use_pool:
-        # args.pool_max, not cfg.pool_max: the latter is the router width and
-        # equals the pool's current size, so using it as a ceiling means
-        # n < max_experts is false forever and the pool can never grow.
-        grower = AutoGrow(grow_k=args.grow_k, max_experts=args.pool_max,
-                          mem_frac_max=args.grow_mem_frac)
-        print(f"auto-growth armed: pool starts at {model.pool.n_experts()} "
-              f"experts, ceiling {cfg.pool_max}, VRAM brake at "
-              f"{100*args.grow_mem_frac:.0f}%")
-
-    rng = np.random.default_rng(args.seed)
-    ac = torch.autocast(device.type, dtype=torch.bfloat16,
-                        enabled=(device.type == "cuda"))
-    os.makedirs(args.out, exist_ok=True)
-    # the directory holds the best state reached; a resumed run must beat it
-    best = weights_store.best_val(args.weights_dir)
-
-    # Never start over. If this run directory already holds a checkpoint, pick
-    # up from it - model, optimiser moments and step count - so every session
-    # continues improving the same weights instead of discarding them. Adam's
-    # moments matter here: dropping them throws away the curvature estimate and
-    # the first steps after a restart are effectively noise.
-    start_step = 0
-    # --init-from seeds a NEW architecture from old weights. That is different
-    # from resuming: the step count and optimiser state belong to the old run
-    # and the schedule here starts at zero.
-    wdir = args.weights_dir
-    if os.path.exists(os.path.join(wdir, "manifest.json")):
-        # The pool was built at cfg.pool_experts, but the directory may hold
-        # more - a previous session grew it. load_state_dict(strict=False)
-        # would quietly ignore every expert past the built size, discarding
-        # what the run had grown. Resize to what is on disk first.
-        with open(os.path.join(wdir, "manifest.json")) as _f:
-            _n_disk = int(json.load(_f)["n_experts"])
-        if _n_disk and not cfg.use_pool:
-            print(f"ERROR: {wdir}/ holds {_n_disk} experts but this run was "
-                  f"started without --use-pool.\n"
-                  f"       Loading would discard all of them. Add --use-pool, "
-                  f"or point --weights-dir elsewhere.", file=sys.stderr)
-            return 2
-        if cfg.use_pool and _n_disk != model.pool.n_experts():
-            _have = model.pool.n_experts()
-            if _n_disk > _have:
-                model.pool.add_experts(_n_disk - _have, device=device)
-            else:
-                model.pool.experts = nn.ModuleList(
-                    list(model.pool.experts)[:_n_disk])
-                model.pool.gate = nn.Parameter(
-                    model.pool.gate.data[:_n_disk].clone())
-                for _b in ("use", "age", "born", "gate_seen"):
-                    if hasattr(model.pool, _b):
-                        setattr(model.pool, _b,
-                                getattr(model.pool, _b)[:_n_disk].clone())
-                model.pool.invalidate()
-            print(f"  pool resized {_have} -> {_n_disk} to match the directory")
-            _resync_opt(opt, model, args)
-        man, missing, _ = weights_store.load(model, wdir, opt=opt,
-                                             device=device, verbose=True)
-        start_step = int(man.get("step", -1)) + 1
-        best = float(man.get("val") or float("inf"))
-        print(f"resuming from {wdir} at step {start_step} - the directory is "
-              f"the model")
-        args.init_from = None
-        loaded_from_dir = True
-    else:
-        loaded_from_dir = False
-    if args.init_from and not os.path.exists(os.path.join(args.out, "ckpt.pt")):
-        seed = torch.load(args.init_from, map_location=device, weights_only=False)
-        missing, unexpected = model.load_state_dict(seed["model"], strict=False)
-        kept = len(seed["model"]) - len(unexpected)
-        print(f"seeded from {args.init_from}: carried {kept} tensors, "
-              f"{len(missing)} new (the pool), {len(unexpected)} dropped")
-    ck_path = os.path.join(args.out, "ckpt.pt")
-    if os.path.exists(ck_path) and not args.fresh and not loaded_from_dir:
-        # the directory already supplied the weights; a stale ckpt.pt from an
-        # earlier vocabulary would only overwrite them with the wrong shapes
-        prev = torch.load(ck_path, map_location=device, weights_only=False)
-        missing, unexpected = model.load_state_dict(prev["model"], strict=False)
-        if missing or unexpected:
-            print(f"  [note] shape changed since that checkpoint: "
-                  f"{len(missing)} new, {len(unexpected)} dropped tensors")
-        if "opt" in prev:
-            try:
-                opt.load_state_dict(prev["opt"])
-            except (ValueError, KeyError):
-                print("  [note] optimiser state incompatible; moments restarted")
-        start_step = int(prev.get("step", -1)) + 1
-        best = float(prev.get("val", float("inf")))
-        print(f"resuming {ck_path} at step {start_step} (val {best:.4f}) - "
-              f"continuing, not resetting")
-    elif args.fresh:
-        print("--fresh: starting from a new initialisation")
-
-    if grower is not None:
-        # This used to clear inherited experts whose |gate| was under 0.01, on
-        # the reasoning that they had already had a session to earn one and
-        # would otherwise hold the growth brake forever. Neither the brake nor
-        # prune reads the gate any more, so the premise is gone - and the
-        # mechanism was lethal under the staleness rule. It set born and
-        # last_seen to -1e9 to strip every protection and then called prune,
-        # which with "dead means unaddressed" matches EVERY expert: the pool
-        # would come back holding the single one the collapse guard spares.
-        # `born` and `gate_seen` are non-persistent, so a resumed run re-seeds
-        # them: survivors get a full --grow-min-age window before judgement.
-        model.pool.born.fill_(float(start_step))
-        model.pool.gate_seen.copy_(model.pool.gate.data.abs())
-    t0 = time.time()
-
-    def get_batch(split):
-        if sources is not None:
-            # With a micro-batch of 1 and four corpora, int(round(1 * 0.25))
-            # is 0 for every source but the last, which then received the whole
-            # batch - the model trained on one corpus and the mixture was a
-            # fiction. When the batch cannot be split, pick ONE source per
-            # micro-batch by weight instead; across accumulation steps the
-            # intended proportions are recovered.
-            weights = np.array([w for _, w in sources], dtype=np.float64)
-            weights = weights / weights.sum()
-            if args.batch < len(sources):
-                c = sources[int(rng.choice(len(sources), p=weights))][0]
-                c.batch = args.batch
-                return c.batch_for(split, rng)
-            xs, ys, used = [], [], 0
-            for j, (c, w) in enumerate(sources):
-                n = (args.batch - used if j == len(sources) - 1
-                     else int(round(args.batch * weights[j])))
-                n = max(0, min(n, args.batch - used))
-                if n == 0:
-                    continue
-                c.batch = n
-                a, b = c.batch_for(split, rng)
-                xs.append(a)
-                ys.append(b)
-                used += n
-            return torch.cat(xs), torch.cat(ys)
-        if replay is None or args.replay <= 0:
-            return corpus.batch_for(split, rng)
-        n_old = int(round(args.batch * args.replay))
-        corpus.batch = args.batch - n_old
-        replay.batch = n_old
-        xa, ya = corpus.batch_for(split, rng)
-        xb, yb = replay.batch_for(split, rng)
-        return torch.cat([xa, xb]), torch.cat([ya, yb])
-
-    if start_step >= args.steps:
-        print(f"already at step {start_step} of {args.steps}; raise --steps "
-              f"to keep training this model further")
-        return 0
-    for step in range(start_step, args.steps):
-        lr = lr_at(step, args.steps, args.lr, args.warmup)
-        for g in opt.param_groups:
-            g["lr"] = lr * (args.trunk_lr_mult if g.get("name") == "trunk"
-                            else 1.0)
-        opt.zero_grad(set_to_none=True)
-        tot = 0.0
-        for _ in range(args.accum):
-            x, y = get_batch("train")
-            with ac:
-                _, loss = model(x, y)
-                if cfg.use_pool:
-                    loss = loss + cfg.pool_aux * model.pool_aux()
-            (loss / args.accum).backward()
-            tot += loss.item() / args.accum
-        gn = float(torch.nn.utils.clip_grad_norm_(model.parameters(), args.clip))
-        opt.step()
-
-        if step % args.log_every == 0 or step == args.steps - 1:
-            el = time.time() - t0
-            tps = args.batch * cfg.block * args.accum * (step + 1) / el
-            print(f"step {step:>5}/{args.steps} loss {tot:.4f} lr {lr:.2e} "
-                  f"gn {gn:.2f} ponder {model.last_steps:.2f} "
-                  f"{tps/1e3:.1f}k tok/s eta "
-                  f"{(args.steps-step-1)*el/(step+1)/60:.0f}m", flush=True)
-
-        if (step + 1) % args.eval_every == 0 or step == args.steps - 1:
-            model.eval()
-            vs = []
-            with torch.no_grad():
-                for _ in range(args.eval_batches):
-                    x, y = get_batch("val")
-                    with ac:
-                        _, l = model(x, y)
-                    vs.append(l.item())
-            model.train()
-            val = float(np.mean(vs))
-            print(f"  val {val:.4f} ppl {math.exp(min(val,20)):.2f} "
-                  f"ponder {model.last_steps:.2f}", flush=True)
-            if grower is not None:
-                # prune BEFORE growing, so this eval's decision can see what
-                # the last speculative batch was actually worth
-                gone = 0
-                if step > 0:
-                    gone = model.pool.prune(step, survival=args.grow_min_age)
-                    if gone:
-                        print(f"  pruned {gone} experts whose gate never left "
-                              f"zero -> {model.pool.n_experts()} experts",
-                              flush=True)
-                rec = grower.step(val, model.pool, step)
-                if rec["grew"] or gone:
-                    _resync_opt(opt, model, args)
-                if rec["grew"]:
-                    print(f"  GREW +{rec['grew']} -> {rec['experts']} experts "
-                          f"| {model.n_params()/1e6:.2f}M params | {rec['reason']}",
-                          flush=True)
-                elif rec.get("reason"):
-                    print(f"  [pool] {rec['reason']}", flush=True)
-            if val < best:
-                best = val
-                weights_store.save(model, wdir, step=step, val=val, opt=opt,
-                                   cfg=asdict(cfg), verbose=True)
-                print(f"  improved - weights/ advanced to val {val:.4f}",
-                      flush=True)
-    print(f"\ndone in {(time.time()-t0)/60:.1f}m best val {best:.4f}")
-    return 0
 
 
 def cmd_stream(args):
@@ -2234,8 +1928,8 @@ def cmd_ponder_probe(args):
 
 def main():
     ap = argparse.ArgumentParser(
-        description="train mini-AGI: stream (batch 1, cached, chunked) or "
-                    "batch (fixed windows, one graph per window)")
+        description="train mini-AGI: read files continually, or stream a "
+                    "packed corpus. Batch 1, cached, chunked, either way")
     ap.add_argument("--device", default="cuda" if torch.cuda.is_available() else "cpu")
     sub = ap.add_subparsers(dest="cmd", required=True)
 
@@ -2561,62 +2255,6 @@ def main():
     st.add_argument("--max-reverts", type=int, default=3,
                     help="give up after this many reverts rather than thrash")
     st.set_defaults(fn=cmd_stream)
-
-    t = sub.add_parser("batch", help="the older fixed-window regime")
-    t.add_argument("--data", default="data_char")
-    t.add_argument("--mix", default=None,
-                   help='e.g. "data_char:0.30,data_math_char:0.25,data_chat_char:0.45"')
-    t.add_argument("--replay-data", default=None)
-    t.add_argument("--replay", type=float, default=0.25)
-    t.add_argument("--out", default="runs/recur")
-    t.add_argument("--steps", type=int, default=2000)
-    t.add_argument("--batch", type=int, default=12)
-    t.add_argument("--accum", type=int, default=4)
-    t.add_argument("--block", type=int, default=1024)
-    t.add_argument("--d-model", type=int, default=512)
-    t.add_argument("--d-ff", type=int, default=1408)
-    t.add_argument("--n-head", type=int, default=8)
-    t.add_argument("--n-prelude", type=int, default=2)
-    t.add_argument("--n-recur", type=int, default=3)
-    t.add_argument("--n-coda", type=int, default=1)
-    t.add_argument("--max-steps", type=int, default=4)
-    t.add_argument("--train-steps-mean", type=float, default=0.0,
-                   help="sample training depth from Poisson(mean)+1; 0 = always max")
-    t.add_argument("--bptt-window", type=int, default=4)
-    t.add_argument("--min-steps", type=int, default=1)
-    t.add_argument("--ponder-beta", type=float, default=0.01)
-    t.add_argument("--halt-prior", type=float, default=0.4)
-    t.add_argument("--lr", type=float, default=6e-4)
-    t.add_argument("--trunk-lr-mult", type=float, default=0.3,
-                   help="shared trunk learns this fraction of the pool's rate")
-    t.add_argument("--warmup", type=int, default=200)
-    t.add_argument("--wd", type=float, default=0.1)
-    t.add_argument("--clip", type=float, default=1.0)
-    t.add_argument("--seed", type=int, default=0)
-    t.add_argument("--use-pool", action="store_true")
-    t.add_argument("--pool-experts", type=int, default=64)
-    t.add_argument("--pool-d-ff", type=int, default=192)
-    t.add_argument("--pool-top-k", type=int, default=4)
-    t.add_argument("--pool-max", type=int, default=512)
-    t.add_argument("--grow-k", type=int, default=8)
-    t.add_argument("--grow-min-age", type=int, default=300,
-                   help="training steps a grown expert gets to lift its gate "
-                        "before it is eligible for pruning")
-    t.add_argument("--grow-mem-frac", type=float, default=0.85,
-                   help="refuse to grow once this fraction of VRAM is committed")
-    t.add_argument("--weights-dir", default="weights",
-                   help="the directory that IS the model")
-    t.add_argument("--export-experts", default="experts",
-                   help="directory to keep one file per expert in ('' to skip)")
-    t.add_argument("--init-from", default=None,
-                   help="seed weights from another checkpoint; schedule starts at 0")
-    t.add_argument("--fresh", action="store_true",
-                   help="discard the existing checkpoint and reinitialise "
-                        "(off by default: training continues)")
-    t.add_argument("--log-every", type=int, default=100)
-    t.add_argument("--eval-every", type=int, default=500)
-    t.add_argument("--eval-batches", type=int, default=20)
-    t.set_defaults(fn=cmd_train)
 
     p = sub.add_parser("ponder-probe")
     p.add_argument("--ckpt", default="weights",
