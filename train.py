@@ -2207,8 +2207,11 @@ def main():
                     default=_cfg(_c, "growth.mem_frac", 0.85))
     rd.set_defaults(fn=cmd_read)
 
-    st = sub.add_parser("stream",
-                        help="batch 1, cached, chunked - the way it runs")
+    st = sub.add_parser(
+        "stream",
+        help="batch 1, cached, chunked, over a PACKED corpus. `read` is the "
+             "one the project runs on; this is the same mechanism pointed at "
+             "a data_* directory instead of a tree of files")
     st.add_argument("--mix", default="data_char:0.25,data_math_char:0.15,"
                                      "data_chat_char:0.25,data_chess_char:0.35")
     st.add_argument("--weights-dir", default="weights")

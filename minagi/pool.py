@@ -173,7 +173,18 @@ class SharedPool(nn.Module):
         return sum(p.numel() for p in self.parameters())
 
     @torch.no_grad()
-    def add_experts(self, k, seed_from=None, device=None, step=0):
+    def add_experts(self, k, seed_from=None, device=None, step=0,
+                    birth_gate=0.0):
+        """
+        Grow the pool by k.
+
+        `birth_gate` is the scale a newcomer starts at, and it is here because
+        AutoGrow passes it to whichever pool it is holding - PagedPool needs
+        it, since an expert born at exactly zero can never be chosen there at
+        all. This pool has always started them at zero and still does unless
+        told otherwise, so the default changes nothing; what it buys is that
+        one grower can drive either pool.
+        """
         device = device or self.gate.device
         for _ in range(k):
             if len(self.experts) >= self.max_experts:
@@ -186,9 +197,9 @@ class SharedPool(nn.Module):
                     pn.copy_(po + 0.02 * torch.randn_like(po))
             self.experts.append(e)
         n = len(self.experts)
-        g = torch.zeros(n, device=device)
+        g = torch.full((n,), float(birth_gate), device=device)
         g[:self.gate.numel()] = self.gate.data
-        self.gate = nn.Parameter(g)              # new entries are exactly 0
+        self.gate = nn.Parameter(g)          # newcomers at birth_gate
         self.invalidate()
         self.use = torch.cat([self.use,
                               torch.zeros(n - self.use.numel(),
@@ -205,10 +216,22 @@ class SharedPool(nn.Module):
         return n
 
     @torch.no_grad()
-    def prune(self, step, min_gate=0.005, min_age=8000, min_delta=5e-4,
-              protect=0):
+    def prune(self, step, survival=None, min_gate=0.005, min_age=8000,
+              min_delta=5e-4, protect=0):
         """
         Remove experts that were grown and never contributed.
+
+        `survival` is the window, and is the name every caller uses because
+        PagedPool.prune takes it. It means the same thing here that `min_age`
+        always did - how long an expert gets before it is judged - and it is
+        accepted so that a caller does not have to know which pool it holds.
+
+        THE TEST DIFFERS FROM PagedPool'S, and deliberately. There, an expert
+        that is not resident does not train, so its gate cannot move and a
+        gate test would condemn exactly the experts being starved of the card;
+        residency is the only honest signal. Here there is no card. Every
+        expert is resident and trains on every step, so the reverse holds -
+        see below.
 
         Contribution is read off the GATE, not off routing traffic. Routing
         traffic cannot answer this question: the load-balancing auxiliary loss
@@ -228,6 +251,8 @@ class SharedPool(nn.Module):
         out of pruning entirely - they carry the trunk's learned capability and
         are not speculative additions.
         """
+        if survival is not None:
+            min_age = survival
         n = len(self.experts)
         g = self.gate.data.abs()
         keep = []
