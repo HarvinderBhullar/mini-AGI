@@ -1,0 +1,161 @@
+# mini-AGI — the settings worth changing.
+#
+# Read when a model is created and every time it reads. Anything not here is
+# either derived or was not worth a knob.
+
+model:
+  # THIS BLOCK BUILDS A MODEL; IT DOES NOT CHANGE ONE. Down as far as the
+  # depth rule, these are fixed in the manifest when the weights are created.
+  # Editing them later does nothing - the shapes would no longer match.
+  d_model: 512            # width of the trunk
+  n_head: 8               # attention heads
+  d_ff: 1408              # the trunk's own feed-forward
+  n_prelude: 2            # dense blocks before the recurrent core; run once
+  n_recur: 1              # blocks per row
+  n_coda: 0               # readout blocks after the last row
+
+  # ------------------------------------------------------------------ DEPTH
+  #
+  # The model runs one row at a time and decides after each whether to stop.
+  # A row is n_recur + n_coda block applications.
+  #
+  # RESCALING RULE: max_steps, halt_prior, bptt_window and train_steps_mean
+  # are all counted in ROWS, so all four move together if n_recur or n_coda
+  # changes what a row is. Missing one is silent.
+
+  max_steps: 24           # most rows a character may take
+  min_steps: 1            # rows it must run before halting may stop it
+
+  halt_prior: 0.072       # halting is held to a mean of 1/this rows
+  halt_thresh: 0.9        # at inference, stop at the first row past this
+  ponder_beta: 0.01       # weight on the halting KL
+
+  bptt_window: 24         # rows gradient reaches back through. Also the
+                          # activation memory, so it sets peak VRAM
+
+  train_steps_mean: 12.8  # depth sampled while training: poisson(this) + 1,
+                          # clipped. 0 runs the ceiling every step
+
+  # The window attention reaches back over. Reading starts at context_start
+  # and grows only when the model is still gaining from the far end of what
+  # it has; context_end is the ceiling and binds at load and at every growth.
+  context_start: 2048     # where a fresh model begins
+  context_end: 4096       # and the furthest it may ever reach
+
+  context_step: 1                     # characters added per growth
+  context_grow_every_chars: 100_000   # characters between growths
+  context_gain_min: 0.015             # stop growing below this gain from depth
+  context_every_chars: 65536          # characters between asking
+
+pool:
+  # experts, width, depth and top_k are fixed in the manifest, like the model
+  # block. resident, ram_cache, capacity_factor, margin, dwell_chars and
+  # explore are run-time and can be changed freely.
+  experts: 64             # how many exist at the start; it grows from here
+  width: 2048             # hidden units in one expert
+  depth: 1                # SwiGLU blocks stacked inside one expert
+  top_k: 8                # how many one character routes through
+
+  # Three tiers: disk holds every expert, RAM caches the recently wanted,
+  # VRAM holds the working set. Only VRAM is scarce.
+  resident: 32            # VRAM - this, not `experts`, is what costs the card
+  ram_cache: 96           # RAM - experts kept in system memory
+
+  capacity_factor: 1.5    # most of a batch one expert may take, as a multiple
+                          # of its fair share; the rest is dropped. 0 removes
+
+  # Text one working-set decision covers. Two values, because reading and
+  # writing ask different things of it: a reader stays on one subject for a
+  # whole passage, while a reply changes subject with the prompt and drifts
+  # as it develops.
+  segment_chars: 2048     # while READING a corpus
+  reselect_chars: 64      # while WRITING - generation re-chooses this often
+
+  margin: 0.10            # how much more a candidate must be wanted to
+                          # displace a resident
+  dwell_chars: 2048       # how long a newcomer is safe from eviction
+  explore: 0.15           # random admissions on the older segment-router path
+
+training:
+  save_every: 5           # minutes between checkpoints
+
+  precision: bf16         # what the forward computes in. Weights, gradients
+                          # and the expert files stay fp32
+
+  # THE LEARNING RATE IS NOT SCHEDULED. minagi/plasticity.py watches held-out
+  # and moves the rate in both directions: easing it down without evidence of
+  # improvement, stepping it back up when held-out jumps and stays there.
+  chunk: 2048             # characters between steps within the window
+  lr: 3.0e-4
+  trunk_lr_mult: 0.1      # the trunk is shared by every domain and is where
+                          # forgetting happens; it learns slower on purpose
+  weight_decay: 0.1
+  clip: 1.0
+
+growth:
+  # Every `every_chars`, add `k` experts if all five brakes are off:
+  #   ROOM     there is disk and VRAM for it
+  #   USED     the capacity it already has is being asked for
+  #   EARNING  the experts added recently are being asked for
+  #   FITS     not too many are already inside their trial
+  #   HONEST   train and held-out have not separated
+  every_chars: 2_000_000  # characters between growth decisions
+  k: 1                    # experts added per decision
+
+  max_gap: 0.4            # HONEST: train minus held-out. 0 disables
+
+  # USED. Staleness is a share of prune.survival_chars: 0.0 when something
+  # asks for an expert, 1.0 when it has gone long enough unasked to be
+  # deleted. Past prune.dying_at it counts as dying.
+  dying_frac_max: 0.35    # stop growing once this share of the pool is dying
+
+  # FITS.
+  max_in_flight: 50       # experts allowed inside their trial at once
+
+  # EARNING. Of the experts past their trial and still young, this share must
+  # have earned a gate.
+  keep_ratio_min: 0.35
+  recent_mult: 4.0        # "still young" is age < this x the trial
+
+  # ROOM. An expert is 25.2 MB, so 10 GB is about 397 of them.
+  max_disk_gb: 10.0       # ceiling on the pool on disk. 0 for no limit
+  mem_frac: 0.95          # refuse to grow past this share of the card
+
+  birth_gate: 0.001       # gate a new expert starts at - a scale, not a
+                          # verdict. Small so it cannot shout before it earns
+
+prune:
+  # USE IT OR LOSE IT. An expert is deleted when nothing has admitted it to
+  # the card for this long, and it is never deleted inside its first
+  # survival_chars - the same number is its routing trial, during which it
+  # competes on how well its key fits rather than on its gate.
+  survival_chars: 100_000_000
+
+  dying_at: 0.65          # how far through that window an expert must get,
+                          # unaddressed, to count as dying for growth's brake
+
+data:
+  train: data/train
+  held_out: data/val
+  weights: weights        # created on the first run if it is not there
+
+  shuffle_seed: 0         # which file and which offset each window comes from
+
+  # Each sub-folder of `train` is a subject, and reading rotates between them.
+  # A window never spans two subjects, but a subject may take several in a row.
+  passage: 32768          # characters read from one file before moving on
+
+decoding:
+  # Generation is greedy - no random numbers - so two samples taken at the
+  # same point in training are the same text. What holds off the loops greedy
+  # decoding usually falls into is a per-character trace that rises when a
+  # character is used and decays after.
+  adapt_strength: 2.5     # logits of suppression for a character just used
+  adapt_decay: 0.88       # half-life of 5.4 characters; 0 disables it
+
+  rep_penalty: 1.0        # the weaker alternative, off at 1.0
+
+plots:
+  enabled: true           # redraw the graphs whenever the sample log grows
+  last: 100               # millions of characters the recent-progress graph
+                          # covers, counted back from wherever reading has got

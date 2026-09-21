@@ -8,6 +8,10 @@ It stores its weights as ordinary files on disk and pages them onto the card as 
 ![dashboard](assets/dashboard.png)
 *Here is how min-run dashboard looks like. The model is pointed to the corpus to constantly read and learn from.*
 
+[History](runs/samples.txt) - here is the samples from the whole training run history so far. You can inspect them yourself to see how the model improved over the course of training/reading the corpus. 
+
+The weights are **not published yet**. The run is still reading its first pass over the corpus, the weights go up once it has been through all of it, which is a couple of weeks away at the current rate.
+
 ## Motivation
 
 Every language model you can actually own today is a model somebody else trained and then froze. You can fine-tune around the edges of it, but you cannot train one from scratch on your own hardware, and you cannot keep training it on what you do day to day - the moment you try, it forgets what it knew before. The result is that a personal model is always somebody else's model with a thin layer of you on top, and it stops learning the day it ships.
@@ -136,7 +140,7 @@ This is the shortest path to a model that knows something you care about.
 
 ```bash
 python3 train.py read ~/notes                     # a dry read - nothing kept
-python3 train.py read src/ docs/ --passes 3 --save
+python3 train.py read ~/src ~/docs --passes 3 --save
 ```
 
 Point it at files or directories. There is nothing to prepare: the alphabet is the 256 byte values, so a file is already written in the only vocabulary the model has. Directories are walked, binaries are skipped by sampling their contents rather than trusting the extension, and each file is read from its beginning to its end because a document has an order.
@@ -216,23 +220,19 @@ The right panel shows which subjects are still moving. Code, chat, stories and r
     pip install scipy                              # a few of the analysis tools
     ```
     PyTorch has to match your CUDA version - see [the PyTorch install page](https://pytorch.org/get-started/locally/). The reference environment is torch 2.6.0+cu124 with numpy 1.24.4. Only the first line is needed to train.
-4. Build a corpus, or point the model at your own files. Each `corpora` command writes `train.bin`, `val.bin` and `meta.json` into a `data_*` directory:
+4. Build the corpus. One command downloads the four public datasets and generates the other four lanes:
     ```bash
-    python3 -m corpora code                 # Python from the local filesystem
-    python3 -m corpora arithmetic
-    python3 -m corpora chat
-    python3 -m corpora chess
+    python3 -m corpora all                  # all eight subjects, a few GB
+    python3 -m corpora all --limit 5000     # a small slice first, to try it
+    python3 -m corpora all --full           # entire datasets: tens of GB, hours
     ```
-5. Create a model. Everything about its shape comes from `config.yaml`:
-    ```bash
-    python3 tools/init_weights.py
-    ```
-6. Start reading:
+    Lanes already on disk are left alone, so an interrupted build can simply be run again. Individual lanes are available too - `python3 -m corpora` lists them - or skip this entirely and point the model at your own files.
+5. Start reading. The weights directory is created from `config.yaml` the first time, so there is nothing to set up:
     ```bash
     python3 train.py read data/train --save --weights-dir weights \
-        --sample-every 10 --sample-log runs/samples.txt
+        --held-out data/val --sample-every 10
     ```
-7. Serve it:
+6. Serve it:
     ```bash
     python3 serve.py --port 8080            # then open http://127.0.0.1:8080
     ```
@@ -243,20 +243,14 @@ The run writes a sample log, redraws its graphs as it goes, and checkpoints ever
 
 ```bash
 python3 -m minagi.store weights                    # what the model is right now
-python3 tools/export_history.py                    # samples.txt -> JSONL + CSV
-python3 tools/plot_dashboard.py                    # the nine-panel run dashboard
+python3 -m corpora                                 # every corpus target
+python3 -m corpora all --only wikipedia stories    # rebuild particular lanes
+python3 -m corpora expand                          # .bin -> the text files read
 
-python3 -m benchmarks report                       # all benchmarks
-python3 -m benchmarks code --ckpt weights
-python3 -m benchmarks arithmetic --ckpt weights
-python3 -m benchmarks chess --ckpt weights
-
-python3 -m experiments capacity --mode adapt       # what to spend VRAM on
-python3 -m experiments forgetting                  # streaming vs mixed batches
-python3 -m experiments trunk_lr                    # how slowly the trunk should learn
-
+python3 train.py read --help                       # every knob the reader has
 python3 train.py stream --steps 140000 --lr 2e-4   # the packed-corpus path
 python3 train.py batch --use-pool --steps 2000     # the fixed-window regime
+python3 train.py ponder-probe --ckpt weights       # depth against difficulty
 ```
 
 Every tool takes `--ckpt weights` - the directory is the model, and there are no `.pt` files to keep track of.
@@ -290,18 +284,17 @@ minagi/          the model. no command lines here.
   schedule.py      the fixed cosine schedule, for the batch trainer
   live.py          serving a model that is being trained underneath
   report.py        the model reading statistics off its own weights
-  notify.py        telling someone when a long run needs attention
+  create.py        writing a fresh weights directory from config.yaml
 
 train.py         read | stream | batch | ponder-probe
 serve.py         local web UI
 config.yaml      the settings worth changing
-benchmarks/      python3 -m benchmarks <code|arithmetic|chess>
-corpora/         python3 -m corpora <code|arithmetic|chat|chess>
-experiments/     python3 -m experiments <forgetting|trunk_lr|freeze|conflict|replay>
-tools/           plotting, run history, probes, animations
+corpora/         python3 -m corpora all - the whole corpus, downloaded and made
 weights/         one file per expert. this directory is the model.
-runs/            sample logs, measurements, and the figures the project cites
 ```
+
+`weights/` is written on the first run and `data/` by `corpora`; neither is in
+the repository. Everything else above is.
 
 ### The weights directory is the model
 
@@ -316,6 +309,8 @@ weights/
 ```
 
 Training resumes from it - weights, Adam moments and step count - and advances it whenever a run improves on what is there, so a session run only to check something still contributes if it finds anything. The directory holds the **best** state the model has reached, not the most recent one. Writes are atomic: every file is written to a `.tmp` and renamed, so an interrupted save cannot leave a half-written weight behind.
+
+The directory is written on the first run.
 
 ## The model
 

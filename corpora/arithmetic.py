@@ -227,7 +227,8 @@ def sample_line(rng):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--out", default="data_math")
+    # what `corpora expand` reads; there is only one output kind now
+    ap.add_argument("--out", default="data_math_char")
     ap.add_argument("--n", type=int, default=2_000_000)
     ap.add_argument("--val", type=int, default=20000)
     ap.add_argument("--seed", type=int, default=0)

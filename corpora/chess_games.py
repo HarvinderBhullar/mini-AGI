@@ -29,7 +29,6 @@ that plays illegal moves is not playing chess, however good the moves look.
 """
 
 import argparse
-import io
 import os
 import re
 import sys

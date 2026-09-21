@@ -398,7 +398,6 @@ def render_explain_turn(p, rng):
 
 
 def render_math_turn(rng, char):
-    math_data.SEP = "" if char else " "
     task = rng.choice(["add", "sub", "mul", "mod"])
     fn, cap, _ = math_data.TASKS[task]
     line = fn(rng, rng.randint(1, min(cap, 6)), rng.random() < 0.25)

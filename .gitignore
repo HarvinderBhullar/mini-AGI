@@ -6,7 +6,8 @@ weights/*
 !weights/manifest.json
 
 # Run artefacts: logs, checkpoints, plots
-runs/
+runs/*
+!runs/samples.txt
 
 __pycache__/
 *.pyc
