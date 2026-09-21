@@ -162,25 +162,25 @@ The numbers below are for tracking purposes and move as the run continues. Held-
 
 There is a second variance underneath these figures. The same configuration run twice lands about 0.014 apart, because the expert dispatch is not deterministic on CUDA. **Treat about 0.03 as the threshold for a real difference**, not the error bar printed beside one score.
 
-**Where the model is** (236.8M characters read, 143 experts):
+**Where the model is** (318.1M characters read, 169 experts):
 
 | | nats/char | bits/byte |
 |---|---|---|
-| **held-out, all eight subjects** | **0.8827** ± 0.0360 | **1.2735** |
-| train | 0.7355 | 1.0611 |
+| **held-out, all eight subjects** | **0.8336** ± 0.0331 | **1.2026** |
+| train | 0.6809 | 0.9823 |
 
 **Held-out loss per subject:**
 
 | Subject | nats/char | bits/byte |
 |---|---|---|
-| `chess` | 0.563 | 0.812 |
-| `stories` | 0.664 | 0.958 |
-| `arithmetic` | 0.675 | 0.974 |
-| `code` | 0.779 | 1.124 |
-| `reasoning` | 0.865 | 1.248 |
-| `chat` | 0.889 | 1.283 |
-| `chat_hermes` | 1.257 | 1.813 |
-| `wikipedia` | 1.369 | 1.975 |
+| `chess` | 0.552 | 0.796 |
+| `stories` | 0.637 | 0.919 |
+| `arithmetic` | 0.657 | 0.948 |
+| `code` | 0.739 | 1.066 |
+| `reasoning` | 0.794 | 1.145 |
+| `chat` | 0.831 | 1.199 |
+| `chat_hermes` | 1.178 | 1.699 |
+| `wikipedia` | 1.280 | 1.847 |
 
 ### Data Scaling
 
@@ -188,19 +188,20 @@ There is a second variance underneath these figures. The same configuration run 
 
 Every point on this chart is a model with a **published bits-per-byte** - the only loss unit that survives a change of tokenizer, which is why a byte-level model can be put beside GPT-3 at all. 
 
-Three held-out sets are involved - PG19, Pile-CC and this project's own mixture - so the vertical positions are not strictly comparable across colours. MambaByte-353M is the closest like-for-like, same parameter class and essentially the same FLOPs per byte, and it read **127x more data than this model has**. Transformer-320M read 339x more. 
+Three held-out sets are involved - PG19, Pile-CC and this project's own mixture - so the vertical positions are not strictly comparable across colours. MambaByte-353M is the closest like-for-like, same parameter class and essentially the same FLOPs per byte, and it read **94x more data than this model has**. Transformer-320M read 251x more. 
 
-**The results so far are promising.** The red line is the fitted power law, `L ∝ D^-0.221` with R² 0.94 over every point past the warmup - a clean, healthy exponent, between Kaplan's 0.095 and Chinchilla's 0.28, and it has held for more than a decade of data. Later windows of the run are steeper still, which is why the projection carries a band out to α = 0.35 rather than a single line.
+**The results so far are promising.** The red line is the fitted power law, `L ∝ D^-0.239` with R² 0.96 over every point past the warmup - a clean, healthy exponent, between Kaplan's 0.095 and Chinchilla's 0.28, and it has held for more than a decade of data. How steep it looks depends on where the fit starts: windows from 40M to 150M give 0.21 to 0.32, and the band on the chart spans that range rather than pretending to one number.
 
 Read straight off that trend, and remembering that the target is this model's own mixture rather than PG19:
 
-| held-out | bytes needed | days at ~780 char/s |
+| held-out | bytes needed | days at ~778 char/s |
 |---|---|---|
-| 1.00 BPB | 0.91B | ~13 |
-| 0.93 BPB | 1.26B | ~19 |
-| 0.80 BPB | 2.50B | ~37 |
+| 1.10 BPB | 0.51B | ~3 |
+| 1.00 BPB | 0.75B | ~6 |
+| 0.93 BPB | 1.02B | ~10 |
+| 0.80 BPB | 1.92B | ~24 |
 
-Those are weeks of reading on one laptop GPU, not years, and all of them sit inside a single pass of the 7.87B-character corpus.
+Those are days to weeks of reading on one laptop GPU, not years, and all of them sit inside a single pass of the 7.87B-character corpus.
 
 The right panel shows which subjects are still moving. Code, chat, stories and reasoning are the steep ones; wikipedia and chat_hermes carry the most loss and have the shallowest slopes, which is the honest counterweight - the expensive domains are not the fastest ones.
 
@@ -326,13 +327,13 @@ The parameter count moves, because the pool grows and prunes itself while traini
 
 ```
 core        8.27M   embeddings, attention, norms, adapter, halting head
-routers     0.15M   one row per expert per call site, plus depth embeddings
-experts   459.3M    146 x 3.15M each  (3 x 512 x 2048)
+routers     0.17M   one row per expert per call site, plus depth embeddings
+experts   531.6M    169 x 3.15M each  (3 x 512 x 2048)
 --------------------
-total     467.7M
+total     540.1M
 ```
 
-**VRAM is set by the working set, not by the pool.** Only 32 experts are resident at a time - about 101M parameters of the 468M - which is why the pool can keep growing on an 8 GB card. Per byte the model costs about 2.4 GFLOPs to train, which puts it in the same compute class as a dense 400M byte-level transformer.
+**VRAM is set by the working set, not by the pool.** Only 32 experts are resident at a time - about 109M parameters of the 540M - which is why the pool can keep growing on an 8 GB card. Per byte the model costs about 2.4 GFLOPs to train, which puts it in the same compute class as a dense 400M byte-level transformer.
 
 ## AI usage
 
