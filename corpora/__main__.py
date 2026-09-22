@@ -4,6 +4,7 @@
     expand       turn generated .bin into the text files training reads
     fetch        any Hugging Face dataset, by name
     reasoning    OpenThoughts deliberation traces
+    pg19         the PG19 test split, for a comparable bits-per-byte
 
     code         Python from the local filesystem   -> data_char
     arithmetic   synthesised, with scratchpads      -> data_math_char
@@ -26,6 +27,7 @@ BUILDERS = {"code": "corpora.code",
             "expand": "corpora.expand",
             "fetch": "corpora.fetch",
             "reasoning": "corpora.reasoning",
+            "pg19": "corpora.pg19",
             "all": "corpora.build"}
 
 

@@ -141,7 +141,9 @@ def load(weights, device=None, learn=True, lr=3e-4, save_every=8,
     # which experts are loaded before the first question instead of nothing.
     if PRIME:
         ids = STATE["tok"].encode(PRIME).ids[-model.cfg.block:]
-        model.choose_for(torch.tensor([ids], device=dev), free=True)
+        # the same rule a reply uses, so the set on the page is the set a
+        # reply would have chosen rather than one picked a different way
+        model.peek_experts(torch.tensor([ids], device=dev), free=True)
 
     if learn:
         from minagi.config import get as _g, load as _lc
@@ -274,7 +276,12 @@ def stream(prompt, max_new):
     # and it reads as fluent-shaped nonsense. `free` drops the hysteresis that
     # keeps a working set steady while reading a stream, because a prompt is a
     # deliberate change of subject.
-    model.choose_for(out, free=True)
+    # ...and it chooses them from ITSELF. choose_for scores the buffer of
+    # states the pool last collected, which is the previous reply's tail, not
+    # this prompt - measured, the same buffer with two different prompts
+    # returned byte-identical working sets. peek_experts reads the prompt once
+    # and scores on its own states.
+    model.peek_experts(out, free=True)
     caches = model.empty_caches()
 
     # Prefill in chunks, the way training reads a corpus. Feeding a long
@@ -295,7 +302,22 @@ def stream(prompt, max_new):
     yield {"swap": {"at": 0, "moved": None, "pool": resident_experts()}}
     for i in range(max_new):
         if reselect and i and i % reselect == 0:
-            moved = model.choose_for(cur)
+            # ASK WITH THE TEXT, NOT WITH ONE CHARACTER. `cur` is `nxt` from
+            # the second step onward - the single token just chosen - so this
+            # asked what the working set should be from one character's
+            # embedding, every 64 characters. That is not adaptation but a
+            # re-roll on whichever character landed on the boundary, and it
+            # can evict experts the prompt chose correctly. `out` is the
+            # prompt plus everything produced so far and is already being
+            # built for the decoder below. The sampler in train.py was fixed
+            # the same way; tests/test_sample_routing.py is the guard.
+            #
+            # It has been harmless rather than correct: demand() scores the
+            # states the pool collected while generating and ignores the
+            # tensor it is handed whenever it has any, which during a reply
+            # it always does. The single token was never actually scored.
+            # Harmless by accident is still worth closing.
+            moved = model.choose_for(out[:, -model.cfg.block:])
             if moved:
                 # Only when something actually moved. choose_by_demand
                 # refuses to swap unless a candidate beats a resident by

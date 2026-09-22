@@ -349,6 +349,115 @@ class RecurCoder(nn.Module):
         return halted_logits, loss
 
     @torch.no_grad()
+    def peek_experts(self, idx, free=True, window=None):
+        """
+        Choose the working set from THIS text, by reading it once first.
+
+        demand() scores the states the call sites routed on while reading the
+        previous chunk, and that is the right evidence in the middle of a
+        passage: text is locally coherent, and what the last few hundred
+        characters needed is a fair guess at what the next few hundred will.
+
+        At a boundary it is not evidence at all. The first chunk of a new
+        passage, and a prompt, have no previous chunk of their own - so the
+        buffer still holds the states of whatever was read last, which is a
+        different subject entirely. demand() then answers a question nobody
+        asked: it returns the same working set for a chess game and a Python
+        file, because the text it is scoring is neither of them. Measured: the
+        same buffer with two different prompts gave byte-identical working
+        sets.
+
+        So read the chunk once and score on its own states - but read it FROM
+        A FIXED STARTING SET, because the read alone is not enough.
+
+        The peek routes through the pool at every recurrence step, so the
+        states it collects depend on two things: the text, and whichever
+        experts happened to be resident when it began. The second is the
+        previous subject, and it does not wash out - measured over seven
+        passages, peeking from wherever the last one left off gave 4.8
+        different working sets for one prompt, and re-reading up to three
+        times still gave 3.3.
+
+        Pinning the starting set to a constant removes that input. The states
+        are then a function of the text alone, and the same passage chooses
+        the same experts whatever preceded it - 1.0 distinct working sets
+        across the same seven passages, and one answer per arithmetic prompt
+        instead of two. A boundary is meant to be a blank slate; this is what
+        makes it one.
+
+        The constant is the top of the gate rather than an arbitrary set.
+        Any fixed set gives the invariance, since all that matters is that it
+        never changes. Taking the experts that have earned the most means the
+        peek also reads with competent ones, so the states it hands to
+        demand() are worth scoring: on the nine sample prompts this reached
+        62 of the pool against 43 for the alternative that gets determinism
+        by throwing evidence away.
+
+        The set moves as the gate moves, so it is recomputed rather than
+        cached. That is a topk over the pool and costs nothing. It means the
+        choice is a function of the text and the current weights - which is
+        the intent: a boundary should not depend on what was READ before it.
+
+        Costs one forward over `window` characters and two swaps - one into
+        the fixed set, one into the chosen one. Paid once per passage in
+        training, one chunk in 32,768 characters, and once per reply while
+        serving. Every chunk after the first keeps want_experts, which is
+        free. The forward is under no_grad, and reading carries 2,048
+        characters WITH gradients every chunk, so a chunk without them once
+        per passage is not a cost worth trading evidence for.
+
+        BOUNDED, and not only for the cost. `window` defaults to the chunk
+        reading uses, so a passage boundary scores the whole chunk it is
+        about to read - all of it, not a slice whose size came from
+        somewhere else. A prompt is not bounded that way: it is however long
+        the conversation has got, and forwarding that in one pass
+        materialises every position across every block application at once,
+        which is the thing serve.py's chunked prefill exists to avoid, and
+        past cfg.block it is not a forward at all but a rotary-table error.
+
+        The tail is what the window takes when it binds. For a prompt that
+        is the right end - the last characters are the message being
+        answered. For a chunk it never binds, because the window is the
+        chunk.
+        """
+        if window is None:
+            # the chunk reading uses. Hardcoding it here put the number in
+            # two places with nothing tying them together, and the literal
+            # that got written was train.py's fallback rather than the
+            # setting in effect - so the peek scored a quarter of the chunk
+            # it was choosing for.
+            from .config import get, load
+            window = int(get(load(), "training.chunk", 512))
+        look = idx[:, -min(window, self.cfg.block):]
+        p = getattr(self, "pool", None)
+        if p is None or not hasattr(p, "demand") or not hasattr(p, "swap_to"):
+            # No pool, or one with every expert resident: there is no working
+            # set to choose and nothing to peek from. Ask anyway. A caller
+            # asks the pool with the text before generating, and that holds
+            # whichever pool is underneath - the ask is simply a no-op here.
+            return self.want_experts(look)
+        p.swap_to(self.canonical_experts())
+        p.arm_observation()          # drop what the last text left behind
+        self(look, caches=self.empty_caches(), pos_offset=0)
+        return self.choose_for(look, free=free)
+
+    @torch.no_grad()
+    def canonical_experts(self):
+        """
+        The fixed set a boundary reads from: the most-earned experts.
+
+        Fixed is the requirement - the peek's states must not depend on what
+        was resident before it. Most-earned is the preference, so that the
+        text is read by experts that contribute rather than by whichever ones
+        an arbitrary rule named.
+        """
+        p = self.pool
+        n = getattr(p, "_n", 0)
+        k = min(len(p.slots), n)
+        g = p.gate.detach().abs()[:n]
+        return torch.topk(g, k).indices.tolist()
+
+    @torch.no_grad()
     def choose_for(self, idx, free=False):
         """
         Put the experts this text wants on the card.

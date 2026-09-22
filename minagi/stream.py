@@ -377,7 +377,16 @@ class FolderEvaluator:
                     # begin_segment is the fallback for a model without peek.
                     nxt = r.peek() if hasattr(r, "peek") else None
                     if nxt is not None and hasattr(self.model, "want_experts"):
-                        self.model.want_experts(nxt)
+                        # seg == 0 opens a new file, so there is no previous
+                        # chunk of this text to score - only the last file's,
+                        # which is a different subject. Scoring on those put a
+                        # working set chosen for the wrong subject into the
+                        # held-out number, exactly the contamination the note
+                        # above is about.
+                        if seg == 0 and hasattr(self.model, "peek_experts"):
+                            self.model.peek_experts(nxt, free=True)
+                        else:
+                            self.model.want_experts(nxt)
                     elif seg % self.segment_chunks == 0 and hasattr(
                             self.model, "begin_segment"):
                         self.model.begin_segment()

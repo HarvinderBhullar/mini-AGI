@@ -1050,7 +1050,19 @@ def cmd_read(args):
                 nxt = r.peek()
                 moved = 0
                 if nxt is not None:
-                    moved = model.want_experts(nxt)
+                    # j == 0 opens this lane's window: a new passage, whose
+                    # first chunk has no previous chunk of its own. The buffer
+                    # at that moment holds the states of the LAST SUBJECT -
+                    # scoring on those chooses a working set for text the
+                    # model has stopped reading. Read the chunk once and score
+                    # on its own states instead; one forward per --passage
+                    # characters, 512 in 32,768.
+                    #
+                    # Every chunk after that keeps the cheap path: its
+                    # predecessor is the same passage, and locally coherent
+                    # text is what demand() was built to score.
+                    moved = (model.peek_experts(nxt, free=True) if j == 0
+                             else model.want_experts(nxt))
                     swapped += moved
                     if tracer is not None and not tracer.done():
                         # j == 0 is the chunk that opens this lane's window -
@@ -1483,6 +1495,14 @@ def sample_now(model, tok, device, n_new=140, variants=None):
                                      adapt_decay=0.88))]
     was_training = model.training
     model.eval()
+    # Sampling must not change what the next training chunk reads with. The
+    # pool's observation buffer is consumed by the next want_experts, and a
+    # round of sampling left it holding the tail of the last prompt's
+    # generation - so one training chunk every ten minutes chose its working
+    # set from sample text. Put back whatever was there.
+    _pool = getattr(model, "pool", None)
+    _held = getattr(_pool, "_h_keep", None)
+    _held = list(_held) if _held is not None else None
     out = []
     for name, prompt in SAMPLE_PROMPTS:
         texts = []
@@ -1490,26 +1510,21 @@ def sample_now(model, tok, device, n_new=140, variants=None):
             ids = list(tok.encode(prompt).ids)[-model.cfg.block:]
             cur = torch.tensor([ids], device=device)
             caches = model.empty_caches()
-            # Choose the experts for THIS prompt, the way reading does. This
-            # used to call begin_segment, which scores the old segment router -
-            # and that router picks its own experts no better than at random -
-            # so the model answered every prompt with whatever thirty-two
-            # experts chance had left on the card.
-            if hasattr(model, "want_experts"):
-                # Hysteresis stops the working set churning on noise while
-                # reading a continuous stream. A prompt is not that - it is a
-                # deliberate change of subject, and the model should be free to
-                # re-choose at once. Held to the reading settings it kept the
-                # experts it had been reading with: measured, 3 of 32 changed
-                # when answering a Python prompt with chess resident, against
-                # 15 of 32 released.
-                p_ = getattr(model, "pool", None)
-                keep = (getattr(p_, "dwell", None), getattr(p_, "margin", None))
-                if keep[0] is not None:
-                    p_.dwell, p_.margin = 0, 0.0
-                model.want_experts(cur)
-                if keep[0] is not None:
-                    p_.dwell, p_.margin = keep
+            # Choose the experts for THIS prompt, by reading it first.
+            #
+            # want_experts alone scored the buffer of states left by the
+            # PREVIOUS prompt's generation, and ignored this one entirely -
+            # so every prompt in a round was answered with a working set
+            # chosen from the text before it, and the first with one chosen
+            # from the last training chunk. peek_experts reads the prompt
+            # once and scores on its own states.
+            #
+            # `free` releases the hysteresis that keeps the working set steady
+            # while reading a continuous stream. A prompt is the opposite - a
+            # deliberate change of subject - and the model should be free to
+            # re-choose at once.
+            if hasattr(model, "peek_experts"):
+                model.peek_experts(cur, free=True)
             else:
                 model.begin_segment()
             off = 0
@@ -1548,6 +1563,8 @@ def sample_now(model, tok, device, n_new=140, variants=None):
             texts.append((label, tok.decode(got)))
             del caches
         out.append((name, prompt, texts))
+    if _pool is not None:
+        _pool._h_keep = _held
     if was_training:
         model.train()
     return out
