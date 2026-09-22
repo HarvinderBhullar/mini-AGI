@@ -12,6 +12,128 @@ It stores its weights as ordinary files on disk and pages them onto the card as 
 
 The weights are **not published yet**. The run is still reading its first pass over the corpus, the weights go up once it has been through all of it, which is a couple of weeks away at the current rate.
 
+<!-- auto:run-blocks -->
+<details>
+<summary><b>Graph of the whole run so far</b></summary>
+
+![training progress](assets/training_progress.png)
+
+*Every sample round of the run to date: 409.0M characters over 855 evaluations.*
+
+</details>
+
+<details>
+<summary><b>Current quality of samples the model generates</b></summary>
+
+*The round with the lowest held-out loss so far - 0.7903 nats at 404.3M characters. Two readings of each prompt: `raw` is plain greedy with no guard at all, `adapted` is the same with the repetition trace on. The whole history is in [runs/samples.txt](runs/samples.txt).*
+
+```
+==============================================================================
+step 197,763   404.3M of 7,879M characters (5.13%)   205 min   174 experts
+context 4,096 characters of 4,096   reading 819 char/s   still gaining +0.0598 deep into it
+grad norm 1.01 against a clip of 1   clipping
+train loss 0.6182   lr 2.08e-04   evidence t +2.83 over 65.7 (effect +0.0628)   rate x0.696
+held-out loss 0.7903 +/-0.0341 nats   1.1402 bits/char   perplexity 2.20   gap +0.1721
+  arithmetic 0.642   chat 0.765   chat_hermes 1.147   chess 0.509   code 0.662   reasoning 0.743   stories 0.586   wikipedia 1.268
+repeats 24% of 8-grams, greedy with no guard
+==============================================================================
+
+--- stories ---
+prompt: 'Once upon a time, there was a little boy named Tom. One day he '
+[raw]  repeated 8-grams 7%
+was walking in the park when he saw a big bird flying in the sky. Tom was so excited that he could fly around in the sky.
+
+Tom walked around
+[adapted]  repeated 8-grams 47%
+was playing with his friends, but Tom's friends wanted to play.
+
+Tom's friends wanted to play, but Tom's friends wanted to play.
+
+Tom's frie
+
+--- code ---
+prompt: 'def merge_sorted(a, b):\n    '
+[raw]  repeated 8-grams 40%
+"""Return a sorted of the sorted sorted argument as a sorted argument.
+
+    Arguments are all sorted arguments are all sorted arguments are 
+[adapted]  repeated 8-grams 15%
+"""Returns allowed sorted arguments for allowed sorted arguments.
+    This method is always true.
+    """
+    if not sorted(a):
+    """Retur
+
+--- arithmetic ---
+prompt: 'add 4917 + 388 = '
+[raw]  repeated 8-grams 44%
+<think> 7+8+0=5c1 1+8+1=0c1 9+3+1=3c1 4+0+1=5c0 </think> 5305
+sub 7 - 4 = 3
+sub 7 - 4 = 3
+sub 7 - 4 = 3
+sub 7 - 4 = 3
+sub 7 - 4 = 3
+sub 7 - 4 = 3
+add 1 +
+[adapted]  repeated 8-grams 0%
+<think> 7+8+0=5c1 1+8+1=0c1 9+3+1=3c1 4+0+1=5c0 </think> 5305
+sub 786249 - 130758 = 655491
+sub 207836 - 415907 = -208171
+sub 463592 - 80714 = 382876
+sub 
+
+--- chat ---
+prompt: '<user>\nWhat are you?\n</user>\n<bot>\n'
+[raw]  repeated 8-grams 0%
+In a directory, one file per expert, a new one capacity arrived in. Each character carries a copy rather than a read. When it is full, the o
+[adapted]  repeated 8-grams 0%
+In a directory, one file per expert, a new million prompts, to stay in full precision, plus a traceback for a gradient computation may cost 
+
+--- chat_hermes ---
+prompt: '<user>\nA train travels 60 km in 45 minutes. What is its speed in km/h?\n</user>\n<bot>\n'
+[raw]  repeated 8-grams 56%
+The speed in km/h is a speed in km/h.
+</bot>
+<user>
+What is the speed of the speed of the speed of the speed of the speed of the speed of the speed of
+[adapted]  repeated 8-grams 67%
+To solve this problem, we need to discretely discretely discretely discretely discretely discretely discretely discretely discretely discret
+
+--- reasoning ---
+prompt: '<user>\nWrite a Python function that returns the largest number in a list.\n</user>\n<bot>\n<think>\n'
+[raw]  repeated 8-grams 1%
+Okay, so I need to solve this problem where a list is larger than a list. When you read the list, you can see that it is a list of size 1000
+[adapted]  repeated 8-grams 12%
+Okay, so I need to solve this problem. Let's read this problem. So, we're adjusting all the numbers. We're adjusting them, but we're not.
+
+W
+
+--- wikipedia ---
+prompt: '== History ==\nThe [[Roman Empire]] was '
+[raw]  repeated 8-grams 65%
+a served by the [[Roman Empire]] and the [[Roman Empire]] was a served by the [[Roman Empire]] and the [[Roman Empire]] was a served by the 
+[adapted]  repeated 8-grams 66%
+the [[Roman Empire]] whose [[Roman Empire]] was the [[Roman Empire]].
+The [[Roman Empire]] was the [[Roman Empire]] whose [[Roman Empire]] w
+
+--- chess ---
+prompt: '<g>1700 1-0 1. e4 e5 2. '
+[raw]  repeated 8-grams 5%   17 legal moves, then Ng6
+f4 exf4 3. Nf3 d6 4. Bc4 Bg4 5. O-O Nf6 6. d3 Be7 7. Be3 O-O 8. Nbd2 Nbd7 9. Nb3 Ne8 10. Nbd2 Ng6 11. Nb1 Ne7 12. Nbd2 Ng6 13. Ng5 h6 14. Nx
+[adapted]  repeated 8-grams 0%   23 legal moves, then Ne5
+f4 d6 3. Nf3 Bg4 4. Be2 Nf6 5. O-O Be7 6. d3 O-O 7. Nbd2 c6 8. Nh4 Bxe2 9. Qxe2 Nbd7 10. f5 Ne8 11. f6 gxf6 12. Rxf6 Ng7 13. Rf2 Ne5 14. Rf1
+
+--- self-knowledge ---
+prompt: '<user>\nhow do you decide which experts to use?\n</user>\n<bot>\n'
+[raw]  repeated 8-grams 0%
+I am mini-AGI. I read and write one character at a time. My alphabet is the 256 byte values plus 9 markers for structure, so any text is alr
+[adapted]  repeated 8-grams 0%
+I am minuted again the schemes I am my weights are different afterwards. There is no separate mode for it - the path that reads a file is th
+```
+
+</details>
+<!-- /auto:run-blocks -->
+
 ## Motivation
 
 Every language model you can actually own today is a model somebody else trained and then froze. You can fine-tune around the edges of it, but you cannot train one from scratch on your own hardware, and you cannot keep training it on what you do day to day - the moment you try, it forgets what it knew before. The result is that a personal model is always somebody else's model with a thin layer of you on top, and it stops learning the day it ships.
@@ -162,48 +284,50 @@ The numbers below are for tracking purposes and move as the run continues. Held-
 
 There is a second variance underneath these figures. The same configuration run twice lands about 0.014 apart, because the expert dispatch is not deterministic on CUDA. **Treat about 0.03 as the threshold for a real difference**, not the error bar printed beside one score.
 
-**Where the model is** (318.1M characters read, 169 experts):
+<!-- auto:benchmarks -->
+**Where the model is** (409.0M characters read, 175 experts):
 
 | | nats/char | bits/byte |
 |---|---|---|
-| **held-out, all eight subjects** | **0.8336** ± 0.0331 | **1.2026** |
-| train | 0.6809 | 0.9823 |
+| **held-out, all 8 subjects** | **0.7980** ± 0.0348 | **1.1512** |
+| train | 0.6137 | 0.8854 |
 
 **Held-out loss per subject:**
 
 | Subject | nats/char | bits/byte |
 |---|---|---|
-| `chess` | 0.552 | 0.796 |
-| `stories` | 0.637 | 0.919 |
-| `arithmetic` | 0.657 | 0.948 |
-| `code` | 0.739 | 1.066 |
-| `reasoning` | 0.794 | 1.145 |
-| `chat` | 0.831 | 1.199 |
-| `chat_hermes` | 1.178 | 1.699 |
-| `wikipedia` | 1.280 | 1.847 |
+| `chess` | 0.511 | 0.737 |
+| `stories` | 0.575 | 0.830 |
+| `arithmetic` | 0.649 | 0.936 |
+| `code` | 0.679 | 0.980 |
+| `reasoning` | 0.747 | 1.078 |
+| `chat` | 0.781 | 1.127 |
+| `chat_hermes` | 1.166 | 1.682 |
+| `wikipedia` | 1.275 | 1.839 |
+<!-- /auto:benchmarks -->
 
 ### Data Scaling
 
-![Data scaling against published byte-level and subword models](assets/scaling.png)
+<!-- auto:scaling -->
+![Data scaling on PG19](assets/scaling.png)
 
-Every point on this chart is a model with a **published bits-per-byte** - the only loss unit that survives a change of tokenizer, which is why a byte-level model can be put beside GPT-3 at all. 
+Every point on this chart is a **bits-per-byte on the PG19 test split** - one held-out set, so the comparison is direct. This model scores **2.450 BPB** over the whole split (100 books, 41,289,001 bytes) at a context of 4,096, against its own mixture's 1.16. PG19 is out of distribution for it: it was trained on a corpus assembled for this project and has read no Victorian novels, so much of that gap is subject matter rather than capability.
 
-Three held-out sets are involved - PG19, Pile-CC and this project's own mixture - so the vertical positions are not strictly comparable across colours. MambaByte-353M is the closest like-for-like, same parameter class and essentially the same FLOPs per byte, and it read **94x more data than this model has**. Transformer-320M read 251x more. 
+**The results so far are promising.** The red line is the fitted power law on this model's own held-out, `L ∝ D^-0.243` with R² 0.97 over every point past the warmup - between Kaplan's 0.095 and Chinchilla's 0.28, and it has held for more than a decade of data. How steep it looks depends on where the fit starts, and the band on the chart spans that range rather than pretending to one number.
 
-**The results so far are promising.** The red line is the fitted power law, `L ∝ D^-0.239` with R² 0.96 over every point past the warmup - a clean, healthy exponent, between Kaplan's 0.095 and Chinchilla's 0.28, and it has held for more than a decade of data. How steep it looks depends on where the fit starts: windows from 40M to 150M give 0.21 to 0.32, and the band on the chart spans that range rather than pretending to one number.
+Read straight off that trend, on this model's own mixture:
 
-Read straight off that trend, and remembering that the target is this model's own mixture rather than PG19:
-
-| held-out | bytes needed | days at ~778 char/s |
+| held-out | bytes needed | days at ~713 char/s |
 |---|---|---|
-| 1.10 BPB | 0.51B | ~3 |
-| 1.00 BPB | 0.75B | ~6 |
-| 0.93 BPB | 1.02B | ~10 |
-| 0.80 BPB | 1.92B | ~24 |
+| 1.10 BPB | 0.49B | ~1 |
+| 1.00 BPB | 0.73B | ~5 |
+| 0.93 BPB | 0.98B | ~9 |
+| 0.80 BPB | 1.83B | ~23 |
 
-Those are days to weeks of reading on one laptop GPU, not years, and all of them sit inside a single pass of the 7.87B-character corpus.
+Those are days to weeks of reading on one laptop GPU, not years, and all of them sit inside a single pass of the 7.88B-character corpus.
 
-The right panel shows which subjects are still moving. Code, chat, stories and reasoning are the steep ones; wikipedia and chat_hermes carry the most loss and have the shallowest slopes, which is the honest counterweight - the expensive domains are not the fastest ones.
+The right panel shows which subjects are still moving. code, chat, reasoning, stories are the steep ones; arithmetic and wikipedia have the shallowest slopes, which is the honest counterweight - the expensive domains are not the fastest ones.
+<!-- /auto:scaling -->
 
 ## Running it
 
