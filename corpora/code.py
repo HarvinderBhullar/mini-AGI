@@ -24,7 +24,6 @@ import argparse
 import sysconfig
 
 import numpy as np
-from tokenizers import ByteLevelBPETokenizer
 
 EOT = "<|endoftext|>"
 SELF_OPEN = "<self>"
@@ -127,13 +126,9 @@ def scan(roots, verbose=True):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--out", default="data_char")
-    ap.add_argument("--vocab", type=int, default=8192)
     ap.add_argument("--val-frac", type=float, default=0.005)
-    ap.add_argument("--tokenizer-sample-mb", type=int, default=150)
     ap.add_argument("--extra-root", action="append", default=[])
     ap.add_argument("--seed", type=int, default=0)
-    ap.add_argument("--char", action="store_true",
-                    help="character level: raw UTF-8 bytes, vocab 256")
     args = ap.parse_args()
 
     os.makedirs(args.out, exist_ok=True)
@@ -162,33 +157,10 @@ def main():
         print("no files survived filtering", file=sys.stderr)
         return 1
 
-    if args.char:
-        from minagi.tokenizer import ByteTokenizer
-        tok = ByteTokenizer()
-        print("\ncharacter level: vocab 256, no tokenizer to fit")
-    else:
-        _fit_bpe(args, flat)
-        tok = None
-    if tok is None:
-        tok = _load_fitted(args)
+    from minagi.tokenizer import ByteTokenizer
+    tok = ByteTokenizer()
+    print("\nbyte level: vocab 265, no tokenizer to fit")
     return _encode(args, flat, tok, paths, total_bytes, roots)
-
-
-def _fit_bpe(args, flat):
-    # ---- fit the tokenizer on a sample (Rust-side, fast) ----
-    print(f"\nfitting byte-level BPE, vocab {args.vocab} ...")
-    t0 = time.time()
-    tok = ByteLevelBPETokenizer()
-    tok.train([flat], vocab_size=args.vocab, min_frequency=2,
-              special_tokens=SPECIALS, show_progress=True)
-    tok_path = os.path.join(args.out, "tokenizer.json")
-    tok.save(tok_path)
-    print(f"  vocab {tok.get_vocab_size()} in {time.time()-t0:.1f}s -> {tok_path}")
-
-
-def _load_fitted(args):
-    from tokenizers import Tokenizer
-    return Tokenizer.from_file(os.path.join(args.out, "tokenizer.json"))
 
 
 def _encode(args, flat, tok, paths, total_bytes, roots):
@@ -250,7 +222,7 @@ def _encode(args, flat, tok, paths, total_bytes, roots):
         "files": len(paths),
         "bytes": total_bytes,
         "chars_per_token": round(ratio, 3),
-        "tokenizer": "byte" if args.char else "bpe",
+        "tokenizer": "byte",
         "eot_id": eot_id,
         "self_open_id": tok.token_to_id(SELF_OPEN),
         "self_close_id": tok.token_to_id(SELF_CLOSE),

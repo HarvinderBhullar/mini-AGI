@@ -217,7 +217,7 @@ The right panel shows which subjects are still moving. Code, chat, stories and r
     ```bash
     pip install torch numpy pyyaml matplotlib      # the model, and its graphs
     pip install flask                              # serve.py
-    pip install tokenizers chess zstandard         # building corpora
+    pip install chess zstandard datasets           # building corpora
     pip install scipy                              # a few of the analysis tools
     ```
     PyTorch has to match your CUDA version - see [the PyTorch install page](https://pytorch.org/get-started/locally/). The reference environment is torch 2.6.0+cu124 with numpy 1.24.4. Only the first line is needed to train.

@@ -23,7 +23,7 @@ FORMAT
         ...
     </bot>
 
-    python3 chat_data.py --out data_chat --char
+    python3 -m corpora chat
 """
 
 import os
@@ -397,7 +397,7 @@ def render_explain_turn(p, rng):
     return f"{U0}\n{q}\n{U1}\n{B0}\n{p['doc']}\n{B1}\n"
 
 
-def render_math_turn(rng, char):
+def render_math_turn(rng):
     task = rng.choice(["add", "sub", "mul", "mod"])
     fn, cap, _ = math_data.TASKS[task]
     line = fn(rng, rng.randint(1, min(cap, 6)), rng.random() < 0.25)
@@ -416,7 +416,7 @@ def render_seed_turn(rng):
     return f"{U0}\n{q}\n{U1}\n{B0}\n{a}\n{B1}\n"
 
 
-def build_conversation(pairs, rng, char, max_turns=4):
+def build_conversation(pairs, rng, max_turns=4):
     """Stack several turns so the model learns multi-turn structure."""
     n = rng.randint(1, max_turns)
     out = []
@@ -430,7 +430,7 @@ def build_conversation(pairs, rng, char, max_turns=4):
         elif r < 0.64 and pairs:
             out.append(render_explain_turn(rng.choice(pairs), rng))
         elif r < 0.80:
-            out.append(render_math_turn(rng, char))
+            out.append(render_math_turn(rng))
         else:
             out.append(render_seed_turn(rng))
     return "".join(out) + "\n"
@@ -438,9 +438,10 @@ def build_conversation(pairs, rng, char, max_turns=4):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--out", default="data_chat")
-    ap.add_argument("--tokenizer", default="data/tokenizer.json")
-    ap.add_argument("--char", action="store_true")
+    # data_chat_char, because that is the name `corpora expand` looks for.
+    # It was data_chat, so even a run that got past the tokenizer wrote where
+    # nothing would read it.
+    ap.add_argument("--out", default="data_chat_char")
     ap.add_argument("--conversations", type=int, default=400000)
     ap.add_argument("--val", type=int, default=4000)
     ap.add_argument("--max-pairs", type=int, default=200000)
@@ -459,16 +460,12 @@ def main():
     for p in pairs[:3]:
         print(f"  {p['name']}: {p['doc'][:70]}")
 
-    if args.char:
-        from minagi.tokenizer import ByteTokenizer
-        tok = ByteTokenizer()
-    else:
-        from tokenizers import Tokenizer
-        tok = Tokenizer.from_file(args.tokenizer)
+    from minagi.tokenizer import ByteTokenizer
+    tok = ByteTokenizer()
 
     rng = random.Random(args.seed)
     print("\nsample conversation:")
-    print(textwrap.indent(build_conversation(pairs, rng, args.char)[:600], "  "))
+    print(textwrap.indent(build_conversation(pairs, rng)[:600], "  "))
 
     for split, count in (("train", args.conversations), ("val", args.val)):
         path = os.path.join(args.out, f"{split}.bin")
@@ -476,7 +473,7 @@ def main():
         with open(path, "wb") as f:
             batch = []
             for i in range(count):
-                batch.append(build_conversation(pairs, rng, args.char))
+                batch.append(build_conversation(pairs, rng))
                 if len(batch) >= 2048:
                     for enc in tok.encode_batch(batch):
                         a = np.array(enc.ids, dtype=np.uint16)
@@ -499,7 +496,7 @@ def main():
 
     json.dump({"vocab_size": tok.get_vocab_size(), "train_tokens": tr,
                "val_tokens": va, "pairs": len(pairs),
-               "tokenizer": "byte" if args.char else "bpe",
+               "tokenizer": "byte",
                "format": f"{U0}...{U1}{B0}...{B1}"},
               open(os.path.join(args.out, "meta.json"), "w"), indent=2)
     print(f"wrote {args.out}/meta.json")
