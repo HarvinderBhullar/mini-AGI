@@ -11,6 +11,8 @@ import os
 import numpy as np
 import torch
 
+from . import device as _device
+
 
 class Corpus:
     def __init__(self, data_dir, device, block, batch):
@@ -41,8 +43,12 @@ class Corpus:
             xa, ya = self._draw(self.self_tokens, n_self, rng)
             xs = np.concatenate([xs, xa])
             ys = np.concatenate([ys, ya])
-        # pinning requires an accelerator; plain transfer on CPU-only boxes
-        pin = self.device.type == "cuda"
+        # Pinning needs a backend that implements it, which is asked rather
+        # than inferred from the device name - torch grew MPS pinning during
+        # the 2.x series. `non_blocking` travels with the same answer, because
+        # asking for an async copy out of unpinned memory is a synchronous one
+        # that merely looks asynchronous.
+        pin = _device.supports_pinning(self.device)
         x = torch.from_numpy(xs)
         y = torch.from_numpy(ys)
         if pin:

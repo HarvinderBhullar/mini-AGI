@@ -66,12 +66,47 @@ def compute_dtype():
 
 
 def amp(device=None):
-    """The autocast region every forward runs inside."""
+    """
+    The autocast region every forward runs inside.
+
+    Enabled where the backend can really do it and disabled everywhere else,
+    which is a question for minagi.device rather than a string comparison
+    here. This used to read `dev == "cuda"`, and the cost of that on Apple
+    silicon was not an error but a silence: every forward ran in fp32, the KV
+    cache doubled, and the only sign was that it was slower than it should
+    have been.
+
+    A backend that cannot autocast falls back to fp32 rather than raising. The
+    model still computes the same thing - fp32 is what bf16 is an
+    approximation OF - it just costs more, and a run that would otherwise not
+    start is the worse outcome.
+    """
+    from . import device as _dev
     dt = _COMPUTE["dtype"]
-    dev = "cuda" if device is None else (
-        device.type if hasattr(device, "type") else str(device).split(":")[0])
-    return torch.autocast(dev, dtype=dt,
-                          enabled=(dt is not torch.float32 and dev == "cuda"))
+    # No device named means "wherever this process would put a model", which
+    # device.pick answers. The old default here was the literal "cuda", so an
+    # unargumented call on a machine without one opened an autocast region
+    # against a backend that was not there.
+    dev = _dev.kind(_dev.pick()) if device is None else _dev.kind(device)
+    on = dt is not torch.float32 and _dev.supports_autocast(dev, dt)
+    return torch.autocast(dev, dtype=dt, enabled=on)
+
+
+def effective_dtype(device):
+    """
+    What the arithmetic will ACTUALLY run in on this device.
+
+    `compute_dtype()` is what was asked for; this is what is going to happen,
+    which differs wherever autocast is unavailable. Call sites that size a
+    buffer to match the compute dtype have to ask this one - sizing to the
+    requested dtype on a backend that ignores it produces a buffer in one
+    dtype feeding matmuls in another.
+    """
+    from . import device as _dev
+    dt = _COMPUTE["dtype"]
+    if dt is torch.float32 or not _dev.supports_autocast(device, dt):
+        return torch.float32
+    return dt
 
 
 # -- storing moments in half the space ------------------------------------

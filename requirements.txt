@@ -1,0 +1,19 @@
+# The model and its graphs - the only group needed to train.
+# Reference environment: torch 2.6.0+cu124, numpy 1.24.4. On NVIDIA, install the
+# torch build matching your CUDA version (https://pytorch.org/get-started/locally/).
+torch>=2.6
+numpy>=1.24
+pyyaml
+matplotlib
+tokenizers          # corpora with a trained tokenizer.json (byte-level ones don't need it)
+
+# serve.py
+flask
+
+# Building corpora
+chess
+zstandard
+datasets
+
+# A few of the analysis tools
+scipy

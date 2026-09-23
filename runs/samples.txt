@@ -110009,3 +110009,1329 @@ prompt: '<user>\nhow do you decide which experts to use?\n</user>\n<bot>\n'
 The arithmetic runs in bf16 and the weights, the optimiser moments that belong to the expert, not to disk, so we can instead characters. Tha
 [adapted]  repeated 8-grams 2%
 The arithmetic runs in bf16 and the weights, the optimiser moments that belong to it. The pool is there any other case, and the code should 
+
+==============================================================================
+step 23   0.0M of 0M characters (6.00%)   22 min   65 experts
+context 512 characters of 512   reading 5 char/s
+grad norm 20.24 against a clip of 1   clipping
+train loss 4.9747   lr 7.20e-05
+repeats 99% of 8-grams, greedy with no guard
+==============================================================================
+
+--- stories ---
+prompt: 'Once upon a time, there was a little boy named Tom. One day he '
+[raw]  repeated 8-grams 99%
+                                                                                                                                            
+[adapted]  repeated 8-grams 0%
+oitfrsKeowa iter fodhen stoiawe fory telan iodser fowhe tian.ore fodst iery awoghe foiter sndawo ferthK ioey fwanter odsihe fowat .eryoi fhe
+
+--- code ---
+prompt: 'def merge_sorted(a, b):\n    '
+[raw]  repeated 8-grams 99%
+                                                                                                                                            
+[adapted]  repeated 8-grams 0%
+towerfidanstheo fwaKerut idosfwer thand oierst fwaoder ithKsfo aeruwn tdoiser fwatheo idsg.t foreawn itherod fwaste ioruK fwedths oaner itod
+
+--- arithmetic ---
+prompt: 'add 4917 + 388 = '
+[raw]  repeated 8-grams 99%
+                                                                                                                                            
+[adapted]  repeated 8-grams 0%
+o�er�fnadoiter .�o�gdfze anor�ites fodher a.nowg fiterod a�s�eoi fwhertd oan.�er foisgd teroawhe fod.n itersoa fwher odg.tes foinare whdote
+
+--- chat ---
+prompt: '<user>\nWhat are you?\n</user>\n<bot>\n'
+[raw]  repeated 8-grams 99%
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+[adapted]  repeated 8-grams 0%
+�o fzerhdawo ter�foin adser owheyt foad.
+U iero�fwa therod fznser oawhey tdoif.
+ aerown thesfod airey owhert fodans ierowhe fotda is.
+er owa
+
+--- chat_hermes ---
+prompt: '<user>\nA train travels 60 km in 45 minutes. What is its speed in km/h?\n</user>\n<bot>\n'
+[raw]  repeated 8-grams 99%
+                                                                                                                                            
+[adapted]  repeated 8-grams 0%
+ore fwat odery insfowat er�od fiher towan foers itheyod fwanre oithe fodsawr teoin f.ayer odsthe fowain reodt fwayer oihest fodawn eroithe f
+
+--- reasoning ---
+prompt: '<user>\nWrite a Python function that returns the largest number in a list.\n</user>\n<bot>\n<think>\n'
+[raw]  repeated 8-grams 99%
+                                                                                                                                            
+[adapted]  repeated 8-grams 0%
+o fer dowathe foins �deroat fwhey oinds foert awheoi fzdst oeryan fower itheod ansfowe thKr iodey foanter whsoi ferdat owney foiher atdsowe 
+
+--- wikipedia ---
+prompt: '== History ==\nThe [[Roman Empire]] was '
+[raw]  repeated 8-grams 99%
+                                                                                                                                            
+[adapted]  repeated 8-grams 1%
+o�Ker�fodhe wag.
+�ore� fo�dher wa�oiter foKhes wad.�ore f��hKt oieruawhe fodtg.
+s reoawhK fodter ihe�oaw� fodter shK.aweo fitrey odhKg foer�
+
+--- chess ---
+prompt: '<g>1700 1-0 1. e4 e5 2. '
+[raw]  repeated 8-grams 99%
+                                                                                                                                            
+[adapted]  repeated 8-grams 0%
+�oda�̚ArYQlo�fi de�a�or tg��foe� dhiareo f.Ú�� tdoer�ai fodges �ore�.awh foditer sg�od faer�iowhe t.dsfor aeig odher�fwa toder is.neod fw
+
+--- self-knowledge ---
+prompt: '<user>\nhow do you decide which experts to use?\n</user>\n<bot>\n'
+[raw]  repeated 8-grams 99%
+                                                                                                                                            
+[adapted]  repeated 8-grams 1%
+ foreitha wndo�f erths ioawer fodthe ina.
+ forest wadoiher fot.n aer�oi fwhest doanre foithe wa.
+d forest iheroan fwyte odsher it.aowf er�od
+
+
+##############################################################################
+# session started 2026-09-23 11:40  at step -1, 0.0M of 867M characters read (0.00%), 64 experts
+##############################################################################
+
+==============================================================================
+step 343   0.7M of 867M characters (0.08%)   31 min   65 experts
+context 2,053 characters of 4,096   reading 381 char/s
+grad norm 6.48 against a clip of 1   clipping
+train loss 3.4351   lr 3.00e-04   evidence t +0.00 over 0.0 (effect +0.0000)   rate x1.000
+held-out loss 2.9738 +/-0.0636 nats   4.2902 bits/char   perplexity 19.57   gap -0.4613
+  arithmetic 3.201   chat 3.169   chess 2.455   code 3.614   reasoning 2.946   stories 2.730   wikipedia 2.701
+repeats 93% of 8-grams, greedy with no guard
+==============================================================================
+
+--- stories ---
+prompt: 'Once upon a time, there was a little boy named Tom. One day he '
+[raw]  repeated 8-grams 98%
+an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an
+[adapted]  repeated 8-grams 14%
+tisongrely athind cofles athingre bylomithen asitrof cend alysithen alorithen comylis athend forithen alysithen comuly atisend forithen alys
+
+--- code ---
+prompt: 'def merge_sorted(a, b):\n    '
+[raw]  repeated 8-grams 95%
+the an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an a
+[adapted]  repeated 8-grams 3%
+thindesolyrithen asofly cithend asitromen alysithen cofrithen alys bomithend alysitheron acithes flynd atheris onglythe andis comerthin alys
+
+--- arithmetic ---
+prompt: 'add 4917 + 388 = '
+[raw]  repeated 8-grams 90%
+1 1 18 18 18 18 18 18 18 18 18 18 18 18 18 18 18 18 18 18 18 18 18 18 18 18 18 18 18 18 18 18 18 18 18 18 18 18 18 18 18 18 1888888888888888
+[adapted]  repeated 8-grams 0%
+20-15.
+<g3+0=28 179-0=5+ 28.
+me310-1 Ng5+0=28 37.
+me19+0-18 25. Nd370=+18-0 249.
+me5 18+0=327-16 Ng5.
+<ad80=23 1+-0=9. Ng18+0-127 35.
+me8+0=
+
+--- chat ---
+prompt: '<user>\nWhat are you?\n</user>\n<bot>\n'
+[raw]  repeated 8-grams 95%
+
+
+
+
+
+
+                                                                                                                                      
+[adapted]  repeated 8-grams 5%
+ inthes alyrontice asomunthe fis alyntheromis anthed coly antiserof anthelis comuntheris alynthed fomis anthericol anthes findylomer athing 
+
+--- chat_hermes ---
+prompt: '<user>\nA train travels 60 km in 45 minutes. What is its speed in km/h?\n</user>\n<bot>\n'
+[raw]  repeated 8-grams 93%
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                                                                                
+[adapted]  repeated 8-grams 2%
+Then atoris chentily asofund theris angomely thind aserofly thinges athind corely athinges fomuthen alis corenthis aly fontheris andely comi
+
+--- reasoning ---
+prompt: '<user>\nWrite a Python function that returns the largest number in a list.\n</user>\n<bot>\n<think>\n'
+[raw]  repeated 8-grams 93%
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                                                                        
+[adapted]  repeated 8-grams 0%
+Then atoris chentoly asind fremuthin alysorenthicom alys fithend alorithen comus athendily forenthis alyngeromith andes colythin aseroflithe
+
+--- wikipedia ---
+prompt: '== History ==\nThe [[Roman Empire]] was '
+[raw]  repeated 8-grams 95%
+the an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an a
+[adapted]  repeated 8-grams 0%
+thendicoly athengis forenthis aly contheris alynd fomerithen asithely cond atheris fonthely andis comerthin alysed fonthicre alysthin bomeri
+
+--- chess ---
+prompt: '<g>1700 1-0 1. e4 e5 2. '
+[raw]  repeated 8-grams 87%   0 legal moves, then 28
+28 28 28 18 18 18 18 18 18 18 18 18 18 18 18 18 18 18 18 18 18 18 18 18 18 18 18 18 18 18 18 18 18 18888888888888888888888888888888888888888
+[adapted]  repeated 8-grams 0%   0 legal moves, then 38+0=17-0
+38+0=17-0
+<g18925 3+0=-1. Nf28+0=37 159.
+me28-0= 13+0-18. 2795+0=38 16-0=24. Ng18+0-137 259.
+me80=+ 1327-0=5 Nc18+0-1. 23798+0=5 16-0
+me28. 
+
+--- self-knowledge ---
+prompt: '<user>\nhow do you decide which experts to use?\n</user>\n<bot>\n'
+[raw]  repeated 8-grams 93%
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                                                                                                       
+[adapted]  repeated 8-grams 8%
+ anithely ondis atheron cithely angis fomerthin alysed conthis alyrenthis alomen fitheron asithely condither asingly fomenthis alyrenthicom 
+
+==============================================================================
+step 344   0.7M of 867M characters (0.08%)   52 min   65 experts
+context 2,054 characters of 4,096   reading 2 char/s
+grad norm 6.49 against a clip of 1   clipping
+train loss 3.4345   lr 3.00e-04   evidence t +0.00 over 0.0 (effect +0.0000)   rate x1.000
+held-out loss 2.9695 +/-0.0616 nats   4.2840 bits/char   perplexity 19.48   gap -0.4651
+  arithmetic 3.080   chat 3.179   chess 2.503   code 3.618   reasoning 2.956   stories 2.743   wikipedia 2.708
+repeats 93% of 8-grams, greedy with no guard
+==============================================================================
+
+--- stories ---
+prompt: 'Once upon a time, there was a little boy named Tom. One day he '
+[raw]  repeated 8-grams 98%
+an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an
+[adapted]  repeated 8-grams 0%
+tisonglyrenthicof asend blythin aseromuthin alysed conthis alyrengith asomend citheroly angithes flynd aticoren blysithen amoflithen asylitr
+
+--- code ---
+prompt: 'def merge_sorted(a, b):\n    '
+[raw]  repeated 8-grams 95%
+the an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an a
+[adapted]  repeated 8-grams 1%
+inthelysorind athes congitheryl andithes fomungithe alys condither anglys fomithen alysitren cofly athendis bomerthin alys cofuthend alitrom
+
+--- arithmetic ---
+prompt: 'add 4917 + 388 = '
+[raw]  repeated 8-grams 85%
+10= 1 1 1 1 18 18 18 18 18 18 18 18 18 18 18 18 18 18 18 18888888888888888888888888888888888888888888888888888888888888888888888888888888888
+[adapted]  repeated 8-grams 0%
+20-15+9.
+mon 280=317-05 Nd8+12936 40=5-187+0=23 Nd5981-0=27 3+186.
+mon 20=5-18937+0= Nd5281-0=3 Kg1+0-c18927 Nd5360=8+1-0 2497358
+mon 10=2+-
+
+--- chat ---
+prompt: '<user>\nWhat are you?\n</user>\n<bot>\n'
+[raw]  repeated 8-grams 95%
+
+
+
+
+
+
+                                                                                                                                      
+[adapted]  repeated 8-grams 0%
+ inthes alyrontiche asind fomerthin alys contheris alynthed fomitren alysithen corithen alys fomithend alysitron chelitr andys fomenthicol a
+
+--- chat_hermes ---
+prompt: '<user>\nA train travels 60 km in 45 minutes. What is its speed in km/h?\n</user>\n<bot>\n'
+[raw]  repeated 8-grams 93%
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                                                                               
+[adapted]  repeated 8-grams 0%
+ atonisery cheliton asutherin aly fomenthis alyrenthicof and blyserithon alys cithend alorithen fusithen alyromithen asicofl byntheris and c
+
+--- reasoning ---
+prompt: '<user>\nWrite a Python function that returns the largest number in a list.\n</user>\n<bot>\n<think>\n'
+[raw]  repeated 8-grams 93%
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                                                                         
+[adapted]  repeated 8-grams 2%
+Then atoris chentily andesomuthin alyres conthid alysenthicor angly fithes andomither congly athesin fored athingly comesthin alyred fonthis
+
+--- wikipedia ---
+prompt: '== History ==\nThe [[Roman Empire]] was '
+[raw]  repeated 8-grams 95%
+the an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an a
+[adapted]  repeated 8-grams 2%
+thindely atofingres chitond alyserith angomes cithend alyrofithen asitheron culy athendis fomerith anglys contheris alynthed fomitren alysit
+
+--- chess ---
+prompt: '<g>1700 1-0 1. e4 e5 2. '
+[raw]  repeated 8-grams 92%   0 legal moves, then 18
+18 18 18 18 18 18 18 18 18 18 18 18 18 18 18 18 18 18888888888888888888888888888888888888888888888888888888888888888888888888888888888888888
+[adapted]  repeated 8-grams 0%   0 legal moves, then Nd8+0=317-0=2895
+Nd8+0=317-0=2895 16+0-138724 Nc0=5+18932. Kd70-18+5 Nf3260=1897 Kg-0=25+138 Nc0-179. 28+0=35416 Nc0-1827+ Kd5390=18-0 27+5.
+mong18 30=249-17
+
+--- self-knowledge ---
+prompt: '<user>\nhow do you decide which experts to use?\n</user>\n<bot>\n'
+[raw]  repeated 8-grams 93%
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                                                                                                           
+[adapted]  repeated 8-grams 11%
+ anithely condithes angromithe aly fondithes angrithel cond asithery fongithel and comithes angrithely andofithes congly atiseron blythed an
+
+==============================================================================
+step 345   0.7M of 867M characters (0.08%)   91 min   65 experts
+context 2,054 characters of 4,096   reading 1 char/s
+grad norm 6.49 against a clip of 1   clipping
+train loss 3.4335   lr 3.00e-04   evidence t +10.98 over 3.0 (effect +7.8819)   rate x1.000
+held-out loss 2.9636 +/-0.0602 nats   4.2755 bits/char   perplexity 19.37   gap -0.4699
+  arithmetic 2.984   chat 3.186   chess 2.526   code 3.616   reasoning 2.963   stories 2.754   wikipedia 2.715
+repeats 93% of 8-grams, greedy with no guard
+==============================================================================
+
+--- stories ---
+prompt: 'Once upon a time, there was a little boy named Tom. One day he '
+[raw]  repeated 8-grams 98%
+an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an
+[adapted]  repeated 8-grams 0%
+tingloris athend coflysithen amutrin olysed athingrof cesithyl anderomith anglys cofithen alyrithen asomutind colyres athingl fomend athis c
+
+--- code ---
+prompt: 'def merge_sorted(a, b):\n    '
+[raw]  repeated 8-grams 95%
+the an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an a
+[adapted]  repeated 8-grams 0%
+inthelysofrind athely congithes and flythingres atomind chelytron asithend flysithen acorithen alys fomithend alysitron ced athinglys foment
+
+--- arithmetic ---
+prompt: 'add 4917 + 388 = '
+[raw]  repeated 8-grams 87%
+1 1 1 1 1 1 1 1 1 18 18 18 18 18 18 18 18 18 18888888888888888888888888888888888888888888888888888888888888888888888888888888888888888888888
+[adapted]  repeated 8-grams 0%
+20-156
+monthec0= 18327+0-15 Nd
+mun 280=3917+ 5-0=2864 1370=598+ 21-0
+mon 3875120= Nc1-0+8935 274610= Nc0-18325+ Kd
+montis 10=283795 1-0=4+82
+
+--- chat ---
+prompt: '<user>\nWhat are you?\n</user>\n<bot>\n'
+[raw]  repeated 8-grams 95%
+
+
+
+
+
+                                                                                                                                       
+[adapted]  repeated 8-grams 0%
+ inthes alyntoriche and flysithen acorithen alys bomithend alysitron chely atind fomesithyl angres conthid alysentromich anglytis fonderith 
+
+--- chat_hermes ---
+prompt: '<user>\nA train travels 60 km in 45 minutes. What is its speed in km/h?\n</user>\n<bot>\n'
+[raw]  repeated 8-grams 93%
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                                                                                             
+[adapted]  repeated 8-grams 3%
+ atonisery chiton alysed futhingrome alysithen cofly athind beromuthin alyserof cithend alysithen acorithen flys atind omerithyl angus cofit
+
+--- reasoning ---
+prompt: '<user>\nWrite a Python function that returns the largest number in a list.\n</user>\n<bot>\n<think>\n'
+[raw]  repeated 8-grams 93%
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                                                                                          
+[adapted]  repeated 8-grams 3%
+ antherofis conthely anditres angly omithend asitrofl chengy atisomun blerithy andes coflithen asitromyl andes cofithen alyrithen asomuthin 
+
+--- wikipedia ---
+prompt: '== History ==\nThe [[Roman Empire]] was '
+[raw]  repeated 8-grams 98%
+an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an
+[adapted]  repeated 8-grams 1%
+thindely atofungis cheromith and blysenthicor angly fithes andomither angly cofithend asitromen alysithen cofly athind beromuthin asely cofi
+
+--- chess ---
+prompt: '<g>1700 1-0 1. e4 e5 2. '
+[raw]  repeated 8-grams 88%   0 legal moves, then 10
+10 10 10 10 10 10 10 10 10 10 10 10 10 10 10 10 10 10 10 10 10 10 10 10 10 10 10 100000 10 10 10 10 10 10 10 10 10 10 10 10 10 1000000000000
+[adapted]  repeated 8-grams 0%   0 legal moves, then Nd830=17+-0
+Nd830=17+-0
+montis 182530= Nc197+0-1823 5460= Nf187+0-1235 Kd890= Nc17234+0-18 5692370= Nc18+0-15 2349780= Nc16+0-325 Kd87190= 234+-0=185 27
+
+--- self-knowledge ---
+prompt: '<user>\nhow do you decide which experts to use?\n</user>\n<bot>\n'
+[raw]  repeated 8-grams 85%
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+ it it it it it it it it it it it it an an an an an an an an an an an an an an an an an an an an an an an an an an
+[adapted]  repeated 8-grams 0%
+ anithely conditres angithel fomund athiseron cithely angitrof asend chitroly angesith fond alytresin comuthen alis forenthicomy alenthis an
+
+==============================================================================
+step 346   0.7M of 867M characters (0.08%)   131 min   65 experts
+context 2,054 characters of 4,096   reading 1 char/s
+grad norm 6.50 against a clip of 1   clipping
+train loss 3.4322   lr 3.00e-04   evidence t +23.49 over 4.0 (effect +10.7479)   rate x1.000
+held-out loss 2.9582 +/-0.0593 nats   4.2678 bits/char   perplexity 19.26   gap -0.4740
+  arithmetic 2.906   chat 3.193   chess 2.539   code 3.614   reasoning 2.968   stories 2.764   wikipedia 2.723
+repeats 89% of 8-grams, greedy with no guard
+==============================================================================
+
+--- stories ---
+prompt: 'Once upon a time, there was a little boy named Tom. One day he '
+[raw]  repeated 8-grams 98%
+an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an
+[adapted]  repeated 8-grams 4%
+tingloris athend coflysithen amutrin colys athend fitromen alysithen corithed anglys fomithen alyrithen coflys athind beromuthin alys cofren
+
+--- code ---
+prompt: 'def merge_sorted(a, b):\n    '
+[raw]  repeated 8-grams 88%
+th an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an t an an t an t an an an t an an 
+[adapted]  repeated 8-grams 5%
+cinthelysofrithen alys comithend alysitron ached flyting asomerith cond alysitheng alyrof cithend asitromen alysithen cofly athind beromuthi
+
+--- arithmetic ---
+prompt: 'add 4917 + 388 = '
+[raw]  repeated 8-grams 74%
+1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1   1  1     1         1 1 1 1 1                       1 1 1 1  1 1 1 1 1                                 
+[adapted]  repeated 8-grams 0%
+20-1567390= 28+14537 20-1896 35+0=274 18
+mul 30=529187 4+0-365 21890= 37+14528 N0=-136 27980=5+ 134
+mond 280=17536 29+0-18 435720= 1869+0-35
+
+--- chat ---
+prompt: '<user>\nWhat are you?\n</user>\n<bot>\n'
+[raw]  repeated 8-grams 97%
+
+
+
+                                                                                                                                         
+[adapted]  repeated 8-grams 11%
+ ithen alysofitr chend atisomung alytherin coflys athend itromungl asithen cofly athind besorithen alymuthin coflys atrend ithomungl asithen
+
+--- chat_hermes ---
+prompt: '<user>\nA train travels 60 km in 45 minutes. What is its speed in km/h?\n</user>\n<bot>\n'
+[raw]  repeated 8-grams 93%
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                                                                                                          
+[adapted]  repeated 8-grams 0%
+ atronis chely atind fores athingly comenthis alyrof benthicomus and theringly athes onditrel angys cofithen alymutrin asofled chitrong asel
+
+--- reasoning ---
+prompt: '<user>\nWrite a Python function that returns the largest number in a list.\n</user>\n<bot>\n<think>\n'
+[raw]  repeated 8-grams 93%
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                                                                                                       
+[adapted]  repeated 8-grams 0%
+ antherofl cithend asylitron aches flyntid amorengl cithes andylof bithengr asithend colymutrin ased flynthicore anglys thind acomerith flyn
+
+--- wikipedia ---
+prompt: '== History ==\nThe [[Roman Empire]] was '
+[raw]  repeated 8-grams 98%
+an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an
+[adapted]  repeated 8-grams 0%
+thindylof athengis corenthid alys bonthericof and thesingly atromund cithes angly forithend asitheng colymutrin ased flythingore athind comu
+
+--- chess ---
+prompt: '<g>1700 1-0 1. e4 e5 2. '
+[raw]  repeated 8-grams 74%   0 legal moves, then 1
+1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1   1             1  1  1                    1  1 1 1 1  1 1 1  1 1                                           
+[adapted]  repeated 8-grams 0%   0 legal moves, then 380=17+96-0=
+380=17+96-0= 2853147 Nc0=28+ 13590-67 284130= 5+-0
+mont 2817390= 546+1823 N0=-175 2890=34+ 167580- 2391
+mon 40=85+1723 N0-16895 24370= 18+0-
+
+--- self-knowledge ---
+prompt: '<user>\nhow do you decide which experts to use?\n</user>\n<bot>\n'
+[raw]  repeated 8-grams 85%
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+ it it it it it it it it it an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an 
+[adapted]  repeated 8-grams 0%
+ anithely conditres angithel fomund athis congrely athind fomes athingly corenthis alynd fomerith anglys cofithend alysitron achemutin flys 
+
+==============================================================================
+step 347   0.7M of 867M characters (0.08%)   165 min   65 experts
+context 2,054 characters of 4,096   reading 1 char/s
+grad norm 6.50 against a clip of 1   clipping
+train loss 3.4306   lr 3.00e-04   evidence t +15.96 over 5.0 (effect +5.2053)   rate x1.000
+held-out loss 2.9554 +/-0.0584 nats   4.2637 bits/char   perplexity 19.21   gap -0.4752
+  arithmetic 2.843   chat 3.201   chess 2.553   code 3.612   reasoning 2.975   stories 2.773   wikipedia 2.731
+repeats 88% of 8-grams, greedy with no guard
+==============================================================================
+
+--- stories ---
+prompt: 'Once upon a time, there was a little boy named Tom. One day he '
+[raw]  repeated 8-grams 90%
+th an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an t an an 
+[adapted]  repeated 8-grams 1%
+tinglorys athend citrofly angithes blynd atricomen athis flynd atresicong athely bind atroflys cingemuth andlys oritheng acofly bithend asit
+
+--- code ---
+prompt: 'def merge_sorted(a, b):\n    '
+[raw]  repeated 8-grams 83%
+th an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an t an t an t an an t t an an an t an t an t a
+[adapted]  repeated 8-grams 2%
+cinthelysofrithen alymuthin coflys atrend bithengl asomithen crylithed angofl bysithen acorithen alys futhind acomerith blyng athesind cofly
+
+--- arithmetic ---
+prompt: 'add 4917 + 388 = '
+[raw]  repeated 8-grams 86%
+1 1 1 1 1 1 1     1   1     1                                                                                                               
+[adapted]  repeated 8-grams 0%
+20-51673490 28+1537 =0-64821 3950= 7+18246 30-59718 2+0=34 561870 293+-0= 15847623 10=98+ 547230-1 8695+0= 237148 50-9632+ 1870= 54326198 70
+
+--- chat ---
+prompt: '<user>\nWhat are you?\n</user>\n<bot>\n'
+[raw]  repeated 8-grams 75%
+
+ at an an at an an an an an an an an an an an an an an an an an it an an an it an an an it an an an an it an an t t an an an an t t t an an
+[adapted]  repeated 8-grams 1%
+ inthel asofitry cond alitheng bysitromun aled cofitheng asylitron ached blyntis amofreng chitroly andes bithoflyn atresicomun athed blyngit
+
+--- chat_hermes ---
+prompt: '<user>\nA train travels 60 km in 45 minutes. What is its speed in km/h?\n</user>\n<bot>\n'
+[raw]  repeated 8-grams 85%
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+ it it it an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an
+[adapted]  repeated 8-grams 0%
+ atronichel atry fundithes alongitr chend alysithen ofutricom andly besithon alyrithen cofus athind blymeronthicus alyng foredith anglys com
+
+--- reasoning ---
+prompt: '<user>\nWrite a Python function that returns the largest number in a list.\n</user>\n<bot>\n<think>\n'
+[raw]  repeated 8-grams 92%
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+ it it it it it it it it it it it it it it it it it it it it it it it it it it it it it it it it it it it it it 
+[adapted]  repeated 8-grams 0%
+ anderofly thingus atrend comithely angrithes andly ofitheng acomutrin alysed bonthicr alynges fomithend alyrithen coflys athind bleromuthin
+
+--- wikipedia ---
+prompt: '== History ==\nThe [[Roman Empire]] was '
+[raw]  repeated 8-grams 96%
+th an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an
+[adapted]  repeated 8-grams 4%
+thind colytreng asithend alymof cithengr asithend olymutrin acofl besithynd alorithen comus athingly fred athincomus atrengly bithend asofly
+
+--- chess ---
+prompt: '<g>1700 1-0 1. e4 e5 2. '
+[raw]  repeated 8-grams 89%   0 legal moves, then 1
+1 1 1 1 1 1 1 1     1                                                                                                                       
+[adapted]  repeated 8-grams 0%   0 legal moves, then 380=67+19524
+380=67+19524 30-187 26+0=539 18470- 2635+0= 1897423 50=168+ 27-0=34 15980 26+3714 50=8-923 170=6+ 584320 197-0= 5836+124 70=9835 1-0+26 4783
+
+--- self-knowledge ---
+prompt: '<user>\nhow do you decide which experts to use?\n</user>\n<bot>\n'
+[raw]  repeated 8-grams 98%
+ an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an a
+[adapted]  repeated 8-grams 0%
+ anithyl condes atringly fomenthicor alys bendithof angly citres andomuthin alyserof cithend alysitron achemutin blys athend ofitrengl acomi
+
+==============================================================================
+step 348   0.7M of 867M characters (0.08%)   187 min   65 experts
+context 2,054 characters of 4,096   reading 2 char/s
+grad norm 6.50 against a clip of 1   clipping
+train loss 3.4288   lr 3.00e-04   evidence t +10.03 over 6.0 (effect +2.4900)   rate x1.000
+held-out loss 2.9540 +/-0.0578 nats   4.2618 bits/char   perplexity 19.18   gap -0.4748
+  arithmetic 2.786   chat 3.209   chess 2.566   code 3.614   reasoning 2.982   stories 2.782   wikipedia 2.739
+repeats 90% of 8-grams, greedy with no guard
+==============================================================================
+
+--- stories ---
+prompt: 'Once upon a time, there was a little boy named Tom. One day he '
+[raw]  repeated 8-grams 96%
+th an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an
+[adapted]  repeated 8-grams 0%
+tringlofuthes anditryl comung athesind blyrof athengicomutr and blysithen acofly mutrind aselythin cofred athingly bomutren asithyl cond atr
+
+--- code ---
+prompt: 'def merge_sorted(a, b):\n    '
+[raw]  repeated 8-grams 83%
+th an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an t an an t t an t an an t t an an
+[adapted]  repeated 8-grams 2%
+cinthedylofung athis corend athilyng bofutres andithel comyng athis blynd atresicof anglythed anitromus chengly atid boflyngres athind comut
+
+--- arithmetic ---
+prompt: 'add 4917 + 388 = '
+[raw]  repeated 8-grams 90%
+1 3 3 3 3 3 3  3                                                                                                                            
+[adapted]  repeated 8-grams 0%
+2056143790 28+15-0 3647892 =10+53 486720 1935+ =80-1427 36590 8+12437 =0-568 192340 7+5861 230=497 58+0-13 264785 =0913+ 28640 57139-0= 28+1
+
+--- chat ---
+prompt: '<user>\nWhat are you?\n</user>\n<bot>\n'
+[raw]  repeated 8-grams 91%
+
+ at at at at at at at at at at at at an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an 
+[adapted]  repeated 8-grams 0%
+ ithend alysofitr chengutid alyson berith andlymuthe cofingr athes blynditromuch angly fithes andorithe congly athis blend atrofucing athes 
+
+--- chat_hermes ---
+prompt: '<user>\nA train travels 60 km in 45 minutes. What is its speed in km/h?\n</user>\n<bot>\n'
+[raw]  repeated 8-grams 92%
+
+
+
+
+
+
+
+
+
+
+
+ an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an
+[adapted]  repeated 8-grams 4%
+ atrond cithes alyngitrof and chesitromun aly bithend acoflys tringumed athin olyserith and coflytheng asitromun alyched bitrongl asithend c
+
+--- reasoning ---
+prompt: '<user>\nWrite a Python function that returns the largest number in a list.\n</user>\n<bot>\n<think>\n'
+[raw]  repeated 8-grams 89%
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+ it an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an 
+[adapted]  repeated 8-grams 0%
+ andylof cithengr asithed onglymutricof and blysenthicomutr and flysitheng acomutrin alys bedithong acrely futhind asomentrich alynd bofuthe
+
+--- wikipedia ---
+prompt: '== History ==\nThe [[Roman Empire]] was '
+[raw]  repeated 8-grams 92%
+an an at an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an
+[adapted]  repeated 8-grams 1%
+thind cofly athengis atromund chely atingrof blysithen aducomithen alys bofrithend acomuthin alys beditrong aches flyntid amungrof chesitr a
+
+--- chess ---
+prompt: '<g>1700 1-0 1. e4 e5 2. '
+[raw]  repeated 8-grams 79%   0 legal moves, then 1
+1 1 1 1 3 3 3 3 1 3 3 3     3 3                                                                                                             
+[adapted]  repeated 8-grams 0%   0 legal moves, then 38+0=679145
+38+0=679145 2380= 1+0-675 2384910 =+67538 20-149 37+0= 586214 30=97+ 58210- 3647895 20=1+ 348670 529138 =+0-47 2561380 9+4725 10=386 2497+0 
+
+--- self-knowledge ---
+prompt: '<user>\nhow do you decide which experts to use?\n</user>\n<bot>\n'
+[raw]  repeated 8-grams 97%
+ an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an an t
+[adapted]  repeated 8-grams 2%
+ anithyl cofrend athis blyngomutre andithes cofly angithed ancorithes alynd bofuthing alysed comitren alys bofuthind acomes tringly athed co

@@ -15,9 +15,15 @@ import torch.nn.functional as F
 
 from dataclasses import dataclass
 
+from . import device as _device
 
-torch.backends.cuda.matmul.allow_tf32 = True
-torch.backends.cudnn.allow_tf32 = True
+
+# TF32 where there is a CUDA matmul path to turn it on for, and nothing
+# anywhere else. Reading torch.backends.cuda at import time works on a machine
+# with no CUDA - the module exists regardless - but it states an assumption
+# this file no longer makes, so the backend question is asked of the one place
+# that owns it.
+_device.enable_tf32()
 
 
 # ----------------------------------------------------------------------------

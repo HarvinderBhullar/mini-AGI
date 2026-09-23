@@ -29,7 +29,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch.utils.checkpoint import checkpoint
 
-from .precision import compute_dtype
+from .precision import compute_dtype, effective_dtype
 
 class Expert(nn.Module):
     """
@@ -506,8 +506,15 @@ class PooledMLP(nn.Module):
             # is the difference between fitting on the card and not. Autocast
             # does not do it for us: the weights are cast TO buf's dtype a few
             # lines below, so the matmul runs at whatever buf is.
-            dt = compute_dtype()
-            if src.device.type != "cuda":
+            # `effective_dtype`, not `compute_dtype`: the latter is what was
+            # asked for and the former is what autocast on THIS backend will
+            # really deliver. Sizing the buffer to a dtype the device then
+            # ignores would feed bf16 activations into fp32 matmuls, and the
+            # weights are cast to buf's dtype below, so the mismatch would be
+            # silent and would cost exactly the memory this buffer exists to
+            # save. A backend without autocast gets the residual's own dtype.
+            dt = effective_dtype(src.device)
+            if dt is torch.float32:
                 dt = src.dtype
             buf = torch.zeros(n, cap, D, device=src.device, dtype=dt)
             buf[e_sorted, slot] = src[t_sorted].to(dt)
@@ -537,19 +544,18 @@ class PooledMLP(nn.Module):
         return out.view(B, T, D)
 
 
-def _mem_frac():
+def _mem_frac(dev=None):
     """
-    Peak fraction of the GPU this process actually needs. 0.0 without a GPU.
+    Peak fraction of the accelerator this process needs. 0.0 without one.
 
-    Deliberately NOT mem_get_info(): that reports the caching allocator's
-    reserved pool, which stays near 100% once the run is warm whether or not
-    there is real room, so a brake reading it would refuse growth forever.
-    Peak *allocated* is the honest number - it is what has to fit.
+    The reasoning about WHICH number to read - peak allocated, never the
+    allocator's reserved pool - now lives in minagi.device.mem_frac, because
+    both backends have to answer it the same way or the growth brake is either
+    permanently on or permanently off. What is left here is the default: with
+    no device named, ask whichever accelerator is present.
     """
-    if not torch.cuda.is_available():
-        return 0.0
-    total = torch.cuda.get_device_properties(0).total_memory
-    return torch.cuda.max_memory_allocated() / max(total, 1)
+    from . import device as _dev
+    return _dev.mem_frac(dev if dev is not None else _dev.pick())
 
 
 class AutoGrow:
@@ -668,7 +674,12 @@ class AutoGrow:
         n = s["experts"]
         idle_frac = s["idle"] / max(n, 1)
         self.keep_ratio = self._earning(pool, model_step)
-        mem_frac = _mem_frac()
+        # Measured on the device the POOL is on, not on whatever
+        # accelerator happens to be in the machine: a run held to
+        # `--device cpu` beside an idle GPU would otherwise read that
+        # GPU's emptiness and let the pool grow without any brake.
+        gate = getattr(pool, "gate", None)
+        mem_frac = _mem_frac(gate.device if gate is not None else None)
 
         # Growth happens only when every question says yes.
         #   ROOM    is there space for it, on the card and on the disk

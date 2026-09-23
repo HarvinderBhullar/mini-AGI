@@ -33,9 +33,16 @@ import time
 # set before torch loads
 os.environ.setdefault("PYTORCH_CUDA_ALLOC_CONF", "expandable_segments:True")
 
+# BEFORE torch, for the reason given in minagi/alloc.py: each backend's
+# allocator reads these once when it initialises and silently ignores them
+# afterwards.
+from minagi.alloc import configure as _configure_allocator
+_configure_allocator()
+
 import torch
 from flask import Flask, Response, jsonify, request
 
+from minagi import device as _device
 from minagi.recur import load_any
 from minagi.tokenizer import ByteTokenizer
 
@@ -116,21 +123,26 @@ def _manifest(path):
 
 def load(weights, device=None, learn=True, lr=3e-4, save_every=8,
          chunk=None):
-    dev = torch.device(device) if device else torch.device(
-        "cuda" if torch.cuda.is_available() else "cpu")
+    dev = _device.pick(device)
     # read_only marks nothing dirty, so an expert paged in is never written
     # back. That is right for serving and wrong for learning - what the model
     # learned would live in VRAM until the slot was reused and then be gone.
     ro = not learn
     try:
         model, _ = load_any(weights, dev, read_only=ro)
-    except torch.cuda.OutOfMemoryError:
-        # training may be holding most of the card; serve slowly rather than
-        # not at all
-        torch.cuda.empty_cache()
+    except _device.oom_errors() as e:
+        # A training run is probably holding the accelerator; serve slowly
+        # rather than not at all. The catch has to include plain RuntimeError
+        # because that is all an MPS exhaustion raises, so `is_oom` decides
+        # whether this really was memory - without it every load error would
+        # be reported as a full device and silently answered on the CPU.
+        if not _device.is_oom(e):
+            raise
+        _device.empty_cache(dev)
+        print(f"[warn] {_device.kind(dev)} is full, serving on CPU",
+              file=sys.stderr)
         dev = torch.device("cpu")
         model, _ = load_any(weights, dev, read_only=ro)
-        print("[warn] CUDA is full, serving on CPU", file=sys.stderr)
     model.eval()
     STATE.update(model=model, tok=ByteTokenizer(), weights=weights)
     print(f"[loaded] {weights} on {dev}", file=sys.stderr)
@@ -405,15 +417,20 @@ def api_chat():
                         reply.append(ev["t"])
                     yield f"data: {json.dumps(ev)}\n\n"
                 learned = remember(last_user, "".join(reply))
-        except torch.cuda.OutOfMemoryError:
+        except _device.oom_errors() as e:
             # Almost always a training run holding the card. Say so and stay
             # up: dying here closes the socket, and all the browser can tell
-            # you then is that the fetch failed.
-            torch.cuda.empty_cache()
-            yield "data: " + json.dumps({"error":
-                "the GPU is out of memory - something else is probably using "
-                "it. Restart with --device cpu, or stop the other process."
-                }) + "\n\n"
+            # you then is that the fetch failed. Anything that was not
+            # actually a memory failure falls through to the handler below,
+            # which reports it as itself rather than as a full GPU.
+            if not _device.is_oom(e):
+                yield f"data: {json.dumps({'error': str(e)})}\n\n"
+            else:
+                _device.empty_cache()
+                yield "data: " + json.dumps({"error":
+                    "the GPU is out of memory - something else is probably "
+                    "using it. Restart with --device cpu, or stop the other "
+                    "process."}) + "\n\n"
         except Exception as e:                            # noqa: BLE001
             yield f"data: {json.dumps({'error': str(e)})}\n\n"
         dt = max(time.time() - t0, 1e-6)
@@ -838,8 +855,8 @@ def main():
     ap.add_argument("--port", type=int, default=8080)
     ap.add_argument("--host", default="127.0.0.1")
     ap.add_argument("--device", default=None,
-                    help="cuda / cpu; default auto, falling back to CPU if "
-                         "the card is full")
+                    help="cuda / mps / cpu; default is the fastest "
+                         "present, falling back to CPU if it is full")
     ap.add_argument("--no-learn", dest="learn", action="store_false",
                     help="serve without learning. The weights are then opened "
                          "read-only and nothing is written back")

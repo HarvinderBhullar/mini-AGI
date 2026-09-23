@@ -1,7 +1,7 @@
 # mini-AGI
 
 mini-AGI - is a **continual learning** byte-level language model that assembles its own architecture, trains from scratch on a single 8 GB VRAM GPU, and keeps learning from everything it reads.
-It stores its weights as ordinary files on disk and pages them onto the card as it needs them, so the parameter count is bounded by free disk space rather than by VRAM. It grows new capacity while training when it runs short, prunes what nothing asks for, and reads through exactly the same code path it serves on. Targeted at a PC or laptop with at least an 8 GB VRAM GPU on the board.
+It stores its weights as ordinary files on disk and pages them onto the card as it needs them, so the parameter count is bounded by free disk space rather than by VRAM. It grows new capacity while training when it runs short, prunes what nothing asks for, and reads through exactly the same code path it serves on. Targeted at a PC or laptop with at least an 8 GB VRAM GPU on the board, and it runs on Apple silicon through Metal as well.
 
 **NOTE: as of now this is a small toy-level model.** Do not expect a frontier level capabilities. This is rather a small experiment to show, that continual learning from the single stream of data without catastrophic forgetting is possible. Furthermore it is possible on a modest hardware. Which means that almost everyone could train their own version of the model (or simply continue training this one) exactly as they see it fit. And the capabilities would be bounded by the actual hardware, scale and quality of the data available and the amount of time one willing to spend on training the model.
 
@@ -203,6 +203,8 @@ Every expert is a file on disk holding its weights and its Adam moments. Above d
 | RAM | `ram_cache` | recently wanted experts, least-recently-used evicted |
 | VRAM | `resident` | the working set - what a character may route through |
 
+On Apple silicon the RAM and VRAM tiers are the same memory - see [Running on Apple silicon](#running-on-apple-silicon-mps) for what that changes.
+
 Before every chunk the model is asked what the text about to be read wants, and the answer becomes the working set. Demand is scored on the hidden states the call sites actually routed on while reading the previous chunk - an embedding carries no context, so scoring on raw embeddings would have every subject asking for the same experts.
 
 Two rules the project holds to:
@@ -290,7 +292,7 @@ Two defaults worth knowing. **Nothing is saved without `--save`**, so a read is 
 
 The numbers below are for tracking purposes and move as the run continues. Held-out loss is reported with its standard error, and the size of the evaluation is what sets that error - a difference smaller than it is the instrument rather than a result.
 
-There is a second variance underneath these figures. The same configuration run twice lands about 0.014 apart, because the expert dispatch is not deterministic on CUDA. **Treat about 0.03 as the threshold for a real difference**, not the error bar printed beside one score.
+There is a second variance underneath these figures. The same configuration run twice lands about 0.014 apart, because the expert dispatch is not deterministic on CUDA or on Metal. **Treat about 0.03 as the threshold for a real difference**, not the error bar printed beside one score.
 
 <!-- auto:benchmarks -->
 **Where the model is** (437.2M characters read, 174 experts):
@@ -339,7 +341,12 @@ The right panel shows which subjects are still moving. code, chat, reasoning, st
 
 ## Running it
 
-1. Make sure you have a CUDA-capable GPU with at least 8 GB of VRAM, and Python 3.10 or newer. The reference machine is an RTX 3070 Laptop GPU with 8 GB.
+1. Make sure you have one of the following, and Python 3.10 or newer:
+    - **an NVIDIA GPU with at least 8 GB of VRAM.** The reference machine is an RTX 3070 Laptop GPU with 8 GB.
+    - **an Apple silicon Mac.** Training and serving both run on Metal through PyTorch's MPS backend - see [Running on Apple silicon](#running-on-apple-silicon-mps).
+    - a CPU. It works and it is slow; use it to try the code, not to train.
+
+    The backend is chosen for you - CUDA, then MPS, then CPU - and `--device` overrides it on both `train.py` and `serve.py`.
 2. Clone the repository:
     ```bash
     git clone <repository-url>
@@ -352,7 +359,7 @@ The right panel shows which subjects are still moving. code, chat, reasoning, st
     pip install chess zstandard datasets           # building corpora
     pip install scipy                              # a few of the analysis tools
     ```
-    PyTorch has to match your CUDA version - see [the PyTorch install page](https://pytorch.org/get-started/locally/). The reference environment is torch 2.6.0+cu124 with numpy 1.24.4. Only the first line is needed to train.
+    On NVIDIA, PyTorch has to match your CUDA version - see [the PyTorch install page](https://pytorch.org/get-started/locally/). The reference environment is torch 2.6.0+cu124 with numpy 1.24.4. Only the first line is needed to train.
 4. Build the corpus. One command downloads the four public datasets and generates the other four lanes:
     ```bash
     python3 -m corpora all                  # all eight subjects, a few GB
@@ -387,6 +394,36 @@ python3 train.py ponder-probe --ckpt weights       # depth against difficulty
 
 Every tool takes `--ckpt weights` - the directory is the model, and there are no `.pt` files to keep track of.
 
+## Running on Apple silicon (MPS)
+
+mini-AGI now trains and serves on Apple silicon Macs through PyTorch's MPS (Metal) backend. It is the same code path as on CUDA, not a port: every hardware question is answered in one place, `minagi/device.py`, and a weights directory written on an NVIDIA machine moves to a Mac, and back, unchanged. Developed and checked on an M5 Pro with torch 2.14.
+
+**Setup.** The default PyTorch wheel for macOS already carries Metal support, so `pip install torch` is the whole of it - there is no CUDA version to match. The rest of [Running it](#running-it) applies as written. The backend is picked automatically (CUDA, then MPS, then CPU); to be explicit:
+
+```bash
+python3 train.py --device mps read data/train --save --weights-dir weights
+python3 serve.py --port 8080 --device mps
+```
+
+**What differs from CUDA**, all handled for you:
+
+| | CUDA | MPS |
+|---|---|---|
+| mixed precision | bf16 autocast | bf16 autocast on macOS 14 or newer; falls back to fp32 where the OS or torch build cannot do it |
+| optimiser | fused AdamW | fused AdamW when the installed torch supports it on MPS, otherwise `foreach` - the updates agree to the last bit |
+| peak memory | the driver's own counter | sampled from `current_allocated_memory()`, since MPS has no peak counter |
+| memory total for the growth brake | the card's VRAM | `recommended_max_memory()`, typically about three quarters of RAM - Metal will not give one process all of it |
+| out of memory | a dedicated `OutOfMemoryError` | a plain `RuntimeError`, recognised by its message |
+| unsupported operators | - | fall back to the CPU (`PYTORCH_ENABLE_MPS_FALLBACK=1`) instead of stopping the run; the current path hits none |
+
+Capabilities that depend on the torch build or the macOS version are probed once at start-up rather than assumed, so an older setup degrades instead of failing at its first step.
+
+**Unified memory changes what paging means.** The design assumes a discrete card, where an expert in VRAM and the same expert in RAM are two copies either side of a PCIe bus, and `pool.resident` exists to keep the far side small. On Apple silicon the bottom two tiers are the same memory and the move is a memcpy instead of a transfer, so the tier `resident` defends is much cheaper than the one it was sized against. The mechanism is unchanged and still correct - it bounds what the Metal allocator holds - but on a Mac with room to spare, `resident` is the first number worth raising.
+
+**Swap is deliberately kept out.** The MPS high-watermark ratio is left at its default. Raising it lets Metal push the working set into swap, which would tell the growth brake there is room when there is not; on a reader that runs for weeks, an honest allocation failure is better than a run that silently starts paging to the SSD.
+
+Expert dispatch is not deterministic on Metal either, so the same [variance threshold](#benchmarks) applies to benchmark numbers from a Mac.
+
 ## Initialization
 
 A fresh model starts small and grows into its shape. The context window begins at `model.context_start` and extends one character at a time, but only when the model is still getting something out of the far end of the window it already has. The expert pool begins at `pool.experts` and grows from there.
@@ -407,6 +444,8 @@ minagi/          the model. no command lines here.
   ingest.py        turning a pile of files into something to read
   pool.py          the expert pool, and the rules by which it grows and shrinks
   paged.py         the same pool spread over disk, RAM and VRAM
+  device.py        which accelerator this is, and what it can do
+  alloc.py         allocator settings, set before torch loads
   recur.py         latent recurrence with adaptive depth
   stream.py        reading a corpus behind a KV cache, one chunk at a time
   store.py         the weights directory, which IS the model

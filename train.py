@@ -28,21 +28,19 @@ import time
 import argparse
 from dataclasses import asdict
 
-# BEFORE torch, because the allocator reads this once at CUDA init and ignores
-# it afterwards. Without it PyTorch's caching allocator keeps its free blocks in
-# fixed segments, and a run that alternates between a few large short-lived
-# tensors - which is exactly what a checkpointed expert dispatch does, three
-# batched matmuls recomputed in the backward - strands memory it cannot hand
-# back. Measured on an 8,192 window: the backward asked for 384 MiB with 394
-# MiB free and 861 MiB reserved but unallocated. There was plenty of memory;
-# there was no contiguous piece of it. Set it here rather than in a shell so it
-# is a property of the program, not of how it happened to be launched.
-os.environ.setdefault("PYTORCH_CUDA_ALLOC_CONF", "expandable_segments:True")
+# BEFORE torch, because each backend's allocator reads its settings once when
+# it initialises and ignores them afterwards. What is set and why is in
+# minagi/alloc.py, which imports nothing but `os` precisely so that it can run
+# ahead of the import below. Set in the program rather than in a shell so it is
+# a property of what runs, not of how it happened to be launched.
+from minagi.alloc import configure as _configure_allocator
+_configure_allocator()
 
 import numpy as np
 import torch
 import torch.nn as nn
 
+from minagi import device as _device
 from minagi.recur import RecurConfig, RecurCoder, load_recur
 from minagi.pool import PooledMLP, AutoGrow
 from minagi.stream import StreamSet, Evaluator, detach_caches, ramp_context
@@ -106,7 +104,7 @@ def cmd_stream(args):
     buys is roughly an order of magnitude of context on the same card.
     """
 
-    device = torch.device(args.device)
+    device = _device.pick(args.device)
     torch.manual_seed(args.seed)
     rng = np.random.default_rng(args.seed)
 
@@ -170,7 +168,8 @@ def cmd_stream(args):
           "weight_decay": args.wd},
          {"params": [q for q in pool if q.dim() < 2], "name": "pool",
           "weight_decay": 0.0}],
-        lr=args.lr, betas=(0.9, 0.95), fused=(device.type == "cuda"))
+        lr=args.lr, betas=(0.9, 0.95),
+        fused=_device.supports_fused_adam(device))
     print(f"trunk learns at {args.trunk_lr_mult:g}x the pool's rate "
           f"({sum(q.numel() for q in trunk)/1e6:.2f}M trunk, "
           f"{sum(q.numel() for q in pool)/1e6:.2f}M pool)")
@@ -261,13 +260,12 @@ def cmd_stream(args):
 
         if step % args.log_every == 0:
             el = max(time.time() - t0, 1e-9)
-            vram = (f" vram {torch.cuda.max_memory_allocated()/1e6:.0f}MB"
-                    if device.type == "cuda" else "")
+            peak = _device.max_memory_allocated(device)
+            vram = f" vram {peak/1e6:.0f}MB" if peak else ""
             record("step", step=step, loss=float(loss), lr=lr,
                    grad_norm=float(gn), chars=seen, chars_per_s=seen / el,
                    context=streams.context, experts=model.pool.n_experts(),
-                   vram_mb=(torch.cuda.max_memory_allocated() / 1e6
-                            if device.type == "cuda" else None))
+                   vram_mb=(peak / 1e6 if peak else None))
             rp = (f" replay {streams.replays}" if args.replay > 0 else "")
             print(f"step {step:>6}/{args.steps} loss {float(loss):.4f} "
                   f"lr {lr:.2e} gn {float(gn):.2f} ctx {streams.context//1024}k "
@@ -601,7 +599,7 @@ def cmd_read(args):
     from minagi.stream import FolderEvaluator
     from minagi.precision import set_compute_dtype
 
-    device = torch.device(args.device)
+    device = _device.pick(args.device)
     torch.manual_seed(args.seed)
     set_compute_dtype(args.precision)
 
@@ -676,7 +674,7 @@ def cmd_read(args):
     pg = {"params": pool_ps, "name": "pool", "weight_decay": args.wd,
           "lr": args.lr, "base_lr": args.lr}
     opt = torch.optim.AdamW([tg, pg], lr=args.lr, betas=(0.9, 0.95),
-                            fused=(device.type == "cuda"))
+                            fused=_device.supports_fused_adam(device))
     snr = GradSNR()
     print(f"  trunk learns at {args.trunk_lr_mult:g}x the pool's rate "
           f"({sum(q.numel() for q in trunk)/1e6:.1f}M trunk, "
@@ -1258,8 +1256,8 @@ def cmd_read(args):
                               f"({'+%d' % rec['grew'] if rec['grew'] else ''}"
                               f"{'-%d' % gone if gone else ''})  "
                               f"{pool.vram_params()/1e6:.1f}M in VRAM  "
-                              f"vram {torch.cuda.max_memory_allocated()/1e6:.0f}MB"
-                              if device.type == "cuda" else "", flush=True)
+                              f"vram {_device.max_memory_allocated(device)/1e6:.0f}MB"
+                              if _device.is_accel(device) else "", flush=True)
                 if asked_stop or (args.minutes
                                   and (time.time() - t0) / 60 >= args.minutes):
                     break
@@ -1913,7 +1911,7 @@ def cmd_ponder_probe(args):
     """
     import corpora.arithmetic as math_data
     from minagi.tokenizer import load_tokenizer
-    device = torch.device(args.device)
+    device = _device.pick(args.device)
     model, ck = load_recur(args.ckpt, device)
     tok = load_tokenizer(args.data)
     import random
@@ -1947,7 +1945,11 @@ def main():
     ap = argparse.ArgumentParser(
         description="train mini-AGI: read files continually, or stream a "
                     "packed corpus. Batch 1, cached, chunked, either way")
-    ap.add_argument("--device", default="cuda" if torch.cuda.is_available() else "cpu")
+    # None means "choose", which device.pick does: cuda, then mps, then cpu.
+    # Spelling the default as a fixed string here would name a backend the
+    # machine may not have.
+    ap.add_argument("--device", default=None,
+                    help="cuda / mps / cpu; default is the fastest present")
     sub = ap.add_subparsers(dest="cmd", required=True)
 
     rd = sub.add_parser("read",
