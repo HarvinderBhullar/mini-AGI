@@ -96,7 +96,7 @@ prompt: '<user>\nA train travels 60 km in 45 minutes. What is its speed in km/h?
 [raw]  repeated 8-grams 9%
 To solve this problem, we need to determine the value of x, we can use the following code:
 
-```
+  ```
 # Convert to the traveler
 # Convert to the t
 [adapted]  repeated 8-grams 20%
